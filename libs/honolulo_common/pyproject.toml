@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "honolulo-common"
+version = "0.1.0"
+description = "Utilidades transversales de los microservicios de Honolulo (errores, JWT, proveedor de clima, condiciones)."
+requires-python = ">=3.11"
+dependencies = [
+    "Flask>=3.0",
+    "PyJWT>=2.8",
+    "requests>=2.31",
+    "tzdata",
+]
+
+[tool.setuptools.packages.find]
+include = ["honolulo_common*"]

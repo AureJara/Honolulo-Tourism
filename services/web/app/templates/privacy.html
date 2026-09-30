@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Política de privacidad — Honolulo{% endblock %}
+{% block content %}
+<main id="contenido" class="pt-32 pb-24">
+  <article class="max-w-3xl mx-auto px-6 text-on-surface">
+    <p class="font-headline text-xs font-bold tracking-widest text-primary uppercase">Versión {{ policy_version }}</p>
+    <h1 class="mt-1 font-headline text-4xl font-bold tracking-tight">Política de privacidad</h1>
+    <p class="mt-3 p-3 rounded-lg bg-warn-container text-on-warn-container text-sm">
+      Documento base del proyecto. Debe ser revisado por asesoría legal antes de su publicación definitiva.
+    </p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">1. Quién trata tus datos</h2>
+    <p class="mt-2 text-on-surface-variant">Honolulo Eco-Tourism Sanctuary, Tingo María, Huánuco, Perú. Contacto para asuntos de privacidad: <a class="text-primary underline underline-offset-2" href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">2. Qué datos recopilamos</h2>
+    <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
+      <li><strong>Datos de registro:</strong> nombre, apellido y correo electrónico, que debes proporcionar reales.</li>
+      <li><strong>Credenciales:</strong> tu contraseña se guarda cifrada con un algoritmo de hash; nunca la conocemos ni la enviamos.</li>
+      <li><strong>Consentimiento:</strong> la fecha y la versión de esta política que aceptaste.</li>
+      <li><strong>Datos técnicos de seguridad:</strong> fecha del último acceso e intentos fallidos de ingreso, para proteger tu cuenta.</li>
+    </ul>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">3. Para qué los usamos</h2>
+    <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
+      <li>Crear y proteger tu cuenta y confirmar que el correo es tuyo mediante un código de 6 dígitos.</li>
+      <li>Permitirte consultar el clima y el pronóstico de Honolulo para planificar tu visita.</li>
+    </ul>
+    <p class="mt-2 text-on-surface-variant">No vendemos tus datos ni los usamos para publicidad.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">4. Con quién los compartimos</h2>
+    <p class="mt-2 text-on-surface-variant">Únicamente con el proveedor de correo que entrega el código de confirmación. Las consultas de clima se hacen con las coordenadas del lugar, sin tus datos personales.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">5. Cuánto tiempo los conservamos</h2>
+    <p class="mt-2 text-on-surface-variant">Mientras tu cuenta esté activa. Si no confirmas tu correo, la cuenta pendiente puede eliminarse pasados unos días.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">6. Tus derechos</h2>
+    <p class="mt-2 text-on-surface-variant">Puedes solicitar el acceso, la rectificación, la cancelación y la oposición al tratamiento de tus datos personales (derechos ARCO, Ley N.° 29733 de Protección de Datos Personales del Perú) escribiendo a {{ contact_email }}.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">7. Cambios en esta política</h2>
+    <p class="mt-2 text-on-surface-variant">Si cambia, publicaremos una nueva versión y te pediremos aceptarla otra vez cuando corresponda.</p>
+
+    <p class="mt-10"><a class="inline-flex items-center gap-1 text-primary font-semibold underline underline-offset-2" href="{{ url_for('pages.register') }}"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>Volver al registro</a></p>
+  </article>
+</main>
+{% endblock %}

@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.pgdata/
+.logs/
+*.egg-info/
+.dev-test-account.tmp
+*.tmp.py
+.mail/
+.media/
+.dev-credentials.local
+spec.borrador-previo.md

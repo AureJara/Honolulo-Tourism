@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es" class="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Honolulo — Clima y calendario de visitas{% endblock %}</title>
+<meta name="description" content="Clima actual y pronóstico de Honolulo, Tingo María, para planificar tu visita a las cascadas.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<!-- Tailwind por CDN, como en el diseño. Para producción conviene compilarlo (ver README). -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    colors: {
+      "primary": "#236847", "on-primary": "#ffffff", "primary-container": "#3e815f",
+      "on-primary-container": "#f6fff6", "primary-fixed": "#acf2c8", "primary-fixed-dim": "#90d5ad",
+      "secondary": "#39693d", "secondary-container": "#b8edb6", "on-secondary-container": "#3e6d41",
+      "secondary-fixed": "#bbf0b9", "on-secondary-fixed": "#002107", "tertiary": "#595c64",
+      "surface": "#fdfbdf", "background": "#fdfbdf", "on-surface": "#1c1d0c", "on-surface-variant": "#404942",
+      "surface-container-lowest": "#ffffff", "surface-container-low": "#f7f5d9", "surface-container": "#f1efd4",
+      "surface-container-high": "#ebe9ce", "surface-container-highest": "#e5e4c9", "surface-dim": "#dddbc1",
+      "outline": "#707972", "outline-variant": "#bfc9c0", "error": "#ba1a1a", "error-container": "#ffdad6",
+      "on-error-container": "#93000a", "inverse-surface": "#31311f", "inverse-on-surface": "#f4f2d6",
+      "warn-container": "#fff0c2", "on-warn-container": "#5c4400"
+    },
+    fontFamily: { headline: ["Plus Jakarta Sans", "sans-serif"], body: ["Source Sans 3", "sans-serif"] },
+    borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", "2xl": "1rem" }
+  } }
+};
+</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body class="bg-background text-on-surface font-body antialiased selection:bg-secondary-container selection:text-on-secondary-fixed">
+<a href="#contenido" class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:bg-primary focus:text-on-primary focus:px-4 focus:py-2 focus:rounded-lg">Saltar al contenido</a>
+
+{% block header %}
+<header class="fixed top-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-md border-b border-outline-variant/30 shadow-sm">
+  <div class="max-w-7xl mx-auto px-6 md:px-10 h-20 flex justify-between items-center gap-4">
+    <a class="flex items-center gap-2 group" href="{{ url_for('pages.index') }}" aria-label="Honolulo, inicio">
+      <span class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-on-primary shadow-sm group-hover:scale-105 transition-transform duration-200">
+        <span class="material-symbols-outlined text-[20px]" aria-hidden="true">forest</span>
+      </span>
+      <span class="font-headline text-xl font-bold text-primary tracking-tight">Honolulo</span>
+    </a>
+    {% if user %}
+    <nav class="hidden md:flex items-center gap-8 font-headline text-sm font-semibold" aria-label="Principal">
+      <a class="text-primary border-b-2 border-primary pb-1" href="{{ url_for('pages.index') }}#clima-actual">Clima actual</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#calendario">Calendario</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#lugares">Lugares</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#historial">Historial</a>
+      {% if user.role == 'admin' %}
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1 flex items-center gap-1" href="{{ url_for('admin.places') }}"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">edit_square</span>Administración</a>
+      {% endif %}
+    </nav>
+    <div class="flex items-center gap-3">
+      <span class="hidden sm:flex items-center gap-2 text-sm text-on-surface-variant">
+        <span class="w-8 h-8 rounded-full bg-secondary-container text-on-secondary-container flex items-center justify-center font-headline font-bold text-xs" aria-hidden="true">{{ user.full_name[:1] | upper }}</span>
+        <span class="max-w-[10rem] truncate">{{ user.full_name }}</span>
+      </span>
+      <form method="post" action="{{ url_for('pages.logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <button type="submit" class="px-4 py-2 rounded-full border border-outline-variant/60 bg-surface-container-low hover:bg-surface-container-high text-sm font-headline font-semibold text-on-surface transition-colors flex items-center gap-1.5">
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>Salir
+        </button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</header>
+{% endblock %}
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="fixed top-24 left-1/2 -translate-x-1/2 z-40 w-[min(92vw,34rem)] flex flex-col gap-2" role="status" aria-live="polite">
+  {% for category, message in messages %}
+  <div data-flash="{{ 12000 if category == 'error' else 6000 }}" class="px-4 py-3 rounded-xl shadow-lg text-sm flex items-start gap-2 {{ 'bg-error-container text-on-error-container' if category == 'error' else 'bg-secondary-container text-on-secondary-container' }}">
+    <span class="material-symbols-outlined text-[18px] mt-0.5" aria-hidden="true">{{ 'error' if category == 'error' else 'check_circle' if category == 'ok' else 'info' }}</span>
+    <span class="flex-1">{{ message }}</span>
+    <button type="button" data-flash-close aria-label="Cerrar aviso" class="-m-1 p-1 rounded-full hover:bg-black/10 leading-none"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">close</span></button>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+{% block content %}{% endblock %}
+
+{% block footer %}
+<footer class="w-full border-t border-outline-variant/40 bg-surface-container">
+  <div class="max-w-7xl mx-auto px-6 md:px-10 py-14 flex flex-col gap-10">
+    <div class="flex flex-col md:flex-row md:items-start justify-between gap-8">
+      <div class="max-w-md">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-on-primary">
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">forest</span>
+          </span>
+          <span class="font-headline text-2xl font-bold text-primary tracking-tight">Honolulo</span>
+        </div>
+        <p class="text-sm text-on-surface-variant leading-relaxed">
+          Santuario ecológico y biológico en el corazón de Tingo María, Huánuco, Perú. Dedicado a la preservación del bosque húmedo tropical y el turismo de bajo impacto.
+        </p>
+      </div>
+      <div>
+        <h2 class="font-headline text-xs font-bold text-on-surface mb-3 tracking-wider uppercase">Localización</h2>
+        <p class="text-sm text-on-surface-variant">
+          {{ location.name }}, {{ location.district }}<br>
+          Provincia de {{ location.province }}, {{ location.department }}, {{ location.country }}<br>
+          Coordenadas: {{ coords_dms }}
+        </p>
+        <p class="text-xs text-tertiary mt-3">Datos meteorológicos: proveedor externo (Open-Meteo).</p>
+        <p class="text-xs mt-2"><a class="text-primary underline underline-offset-2" href="{{ url_for('pages.privacy') }}">Política de privacidad</a></p>
+      </div>
+    </div>
+    <div class="pt-6 border-t border-outline-variant/30 text-sm text-on-surface-variant">
+      © <span id="year">2026</span> Honolulo Eco-Tourism Sanctuary. Tingo María, Huánuco, Perú. Todos los derechos reservados.
+    </div>
+  </div>
+</footer>
+{% endblock %}
+<script>
+  document.getElementById('year').textContent = new Date().getFullYear();
+  // Los avisos (flash) se ocultan solos y se pueden cerrar con el botón.
+  document.querySelectorAll('[data-flash]').forEach(function (el) { setTimeout(function () { el.remove(); }, Number(el.dataset.flash) || 6000); });
+  document.addEventListener('click', function (e) { var b = e.target.closest('[data-flash-close]'); if (b) b.closest('[data-flash]').remove(); });
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

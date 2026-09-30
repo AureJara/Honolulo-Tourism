@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Confirma tu correo — Honolulo{% endblock %}
+{% block content %}
+<main id="contenido" class="pt-32 pb-24">
+  <div class="max-w-md mx-auto px-6">
+    <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-8 relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-primary-container to-secondary-container"></div>
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed text-xs font-headline font-semibold mb-4">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">mark_email_unread</span>Confirmación de correo
+      </div>
+      <h1 class="font-headline text-3xl font-bold text-on-surface tracking-tight">Ingresa tu código</h1>
+      <p class="mt-2 text-sm text-on-surface-variant">Enviamos un código de 6 dígitos a <strong class="text-on-surface">{{ email_masked }}</strong>. Vence en 10 minutos.</p>
+
+      {% if error %}
+      <div role="alert" class="mt-5 p-3 rounded-lg bg-error-container text-on-error-container text-sm flex items-start gap-2">
+        <span class="material-symbols-outlined text-[18px] mt-0.5" aria-hidden="true">error</span><span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('pages.verify') }}" class="mt-6 flex flex-col gap-4" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="flex flex-col gap-1.5">
+          <label for="code" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Código de confirmación</label>
+          <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="7" required autofocus
+                 placeholder="123456" aria-describedby="code-hint"
+                 class="w-full px-4 py-3 rounded-xl border border-outline-variant/60 bg-surface text-on-surface text-center font-headline text-2xl tracking-[0.5em] focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+          <p id="code-hint" class="text-xs text-tertiary">Revisa también la carpeta de spam.</p>
+        </div>
+        <button type="submit" class="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold transition-colors shadow-md active:scale-95">
+          <span class="material-symbols-outlined text-[20px]" aria-hidden="true">verified</span>Confirmar correo
+        </button>
+      </form>
+
+      <form method="post" action="{{ url_for('pages.resend_code') }}" class="mt-5 text-center text-sm text-on-surface-variant">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        ¿No te llegó? <button id="resend-btn" type="submit" class="font-semibold text-primary underline underline-offset-2 disabled:opacity-50 disabled:no-underline" data-wait="60">Reenviar código</button>
+        <span id="resend-wait" class="text-xs text-tertiary"></span>
+      </form>
+      <p class="mt-4 text-xs text-center text-tertiary"><a class="underline underline-offset-2" href="{{ url_for('pages.register') }}">Usar otro correo</a></p>
+    </div>
+  </div>
+</main>
+<script>
+  // Espera de 60 s entre reenvíos (el servidor también lo limita).
+  (function () {
+    var btn = document.getElementById('resend-btn'), label = document.getElementById('resend-wait');
+    var left = Number(btn.dataset.wait) || 60;
+    btn.disabled = true;
+    var timer = setInterval(function () {
+      left -= 1;
+      if (left <= 0) { clearInterval(timer); btn.disabled = false; label.textContent = ''; }
+      else { label.textContent = ' (disponible en ' + left + ' s)'; }
+    }, 1000);
+    label.textContent = ' (disponible en ' + left + ' s)';
+  })();
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  display: inline-block;
+  vertical-align: middle;
+  line-height: 1;
+}
+.material-symbols-outlined.filled { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+/* Esqueleto de carga */
+.skeleton {
+  background: linear-gradient(90deg, rgba(112, 121, 114, .10) 25%, rgba(112, 121, 114, .20) 37%, rgba(112, 121, 114, .10) 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.4s ease infinite;
+  border-radius: .5rem;
+}
+@keyframes shimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+.custom-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
+.custom-scroll::-webkit-scrollbar-thumb { background: rgba(35, 104, 71, .25); border-radius: 9999px; }
+
+/* Foco visible coherente con el diseño */
+:focus-visible { outline: 2px solid #236847; outline-offset: 2px; }

@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Ingresar — Honolulo{% endblock %}
+{% block content %}
+<main id="contenido" class="pt-32 pb-24">
+  <div class="max-w-md mx-auto px-6">
+    <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-8 relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-primary-container to-secondary-container"></div>
+      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed text-xs font-headline font-semibold mb-4">
+        <span class="material-symbols-outlined text-[15px]" aria-hidden="true">lock</span>Acceso al monitoreo meteorológico
+      </div>
+      <h1 class="font-headline text-3xl font-bold text-on-surface tracking-tight">Ingresar</h1>
+      <p class="mt-2 text-sm text-on-surface-variant">Inicia sesión para consultar el clima y el pronóstico de Honolulo.</p>
+
+      {% if error %}
+      <div role="alert" class="mt-5 p-3 rounded-lg bg-error-container text-on-error-container text-sm flex items-start gap-2">
+        <span class="material-symbols-outlined text-[18px] mt-0.5" aria-hidden="true">error</span><span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('pages.login') }}" class="mt-6 flex flex-col gap-4" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="hidden" name="next" value="{{ next_url }}">
+        <div class="flex flex-col gap-1.5">
+          <label for="email" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Correo electrónico</label>
+          <input id="email" name="email" type="email" required autocomplete="email" value="{{ email }}" placeholder="tucorreo@ejemplo.com"
+                 class="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface text-on-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+        </div>
+        <div class="flex flex-col gap-1.5">
+          <label for="password" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Contraseña</label>
+          <input id="password" name="password" type="password" required autocomplete="current-password"
+                 class="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface text-on-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+        </div>
+        <button type="submit" class="mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold transition-colors shadow-md active:scale-95">
+          <span class="material-symbols-outlined text-[20px]" aria-hidden="true">login</span>Ingresar
+        </button>
+      </form>
+      <p class="mt-6 text-sm text-on-surface-variant text-center">
+        ¿Aún no tienes cuenta? <a class="font-semibold text-primary underline underline-offset-2" href="{{ url_for('pages.register') }}">Regístrate</a>
+      </p>
+    </div>
+  </div>
+</main>
+{% endblock %}

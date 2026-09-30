@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Crear cuenta — Honolulo{% endblock %}
+{% macro field(name, label, type="text", autocomplete="off", hint="", half=False) %}
+<div class="flex flex-col gap-1.5 {{ 'sm:col-span-1' if half else 'sm:col-span-2' }}">
+  <label for="{{ name }}" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">{{ label }}</label>
+  <input id="{{ name }}" name="{{ name }}" type="{{ type }}" required autocomplete="{{ autocomplete }}"
+         {% if type != "password" %}value="{{ values.get(name, '') }}"{% endif %}
+         {% if errors.get(name) %}aria-invalid="true" aria-describedby="{{ name }}-error"{% endif %}
+         class="w-full px-4 py-2.5 rounded-xl border {{ 'border-error' if errors.get(name) else 'border-outline-variant/60' }} bg-surface text-on-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+  {% if errors.get(name) %}<p id="{{ name }}-error" class="text-xs text-error">{{ errors[name] }}</p>
+  {% elif hint %}<p class="text-xs text-tertiary">{{ hint }}</p>{% endif %}
+</div>
+{% endmacro %}
+{% block content %}
+<main id="contenido" class="pt-32 pb-24">
+  <div class="max-w-lg mx-auto px-6">
+    <div class="bg-surface-container-lowest rounded-2xl border border-outline-variant/30 shadow-sm p-8 relative overflow-hidden">
+      <div class="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-primary-container to-secondary-container"></div>
+      <h1 class="font-headline text-3xl font-bold text-on-surface tracking-tight">Crear cuenta</h1>
+      <p class="mt-2 text-sm text-on-surface-variant">Regístrate con tu nombre real y tu correo (puede ser Gmail). Te enviaremos un código para confirmarlo.</p>
+
+      {% if error %}
+      <div role="alert" class="mt-5 p-3 rounded-lg bg-error-container text-on-error-container text-sm flex items-start gap-2">
+        <span class="material-symbols-outlined text-[18px] mt-0.5" aria-hidden="true">error</span><span>{{ error }}</span>
+      </div>
+      {% endif %}
+
+      <form method="post" action="{{ url_for('pages.register') }}" class="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4" novalidate>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        {{ field("first_name", "Nombre", autocomplete="given-name", half=True) }}
+        {{ field("last_name", "Apellido", autocomplete="family-name", half=True) }}
+        {{ field("email", "Correo electrónico", type="email", autocomplete="email", hint="Recibirás un código de 6 dígitos en este correo.") }}
+        {{ field("password", "Contraseña", type="password", autocomplete="new-password", hint="Mínimo 8 caracteres, con letras y números.") }}
+        {{ field("password_confirm", "Repite la contraseña", type="password", autocomplete="new-password") }}
+
+        <div class="sm:col-span-2 flex flex-col gap-1">
+          <label class="flex items-start gap-3 text-sm text-on-surface-variant cursor-pointer">
+            <input type="checkbox" name="accept_privacy" required {{ 'checked' if values.get('accept_privacy') }}
+                   {% if errors.get('accept_privacy') %}aria-invalid="true" aria-describedby="accept_privacy-error"{% endif %}
+                   class="mt-1 h-4 w-4 rounded border-outline-variant text-primary focus:ring-primary">
+            <span>Declaro que mis datos son reales y acepto la
+              <a class="font-semibold text-primary underline underline-offset-2" href="{{ url_for('pages.privacy') }}" target="_blank" rel="noopener">política de privacidad</a>
+              (versión {{ policy_version }}).</span>
+          </label>
+          {% if errors.get('accept_privacy') %}<p id="accept_privacy-error" class="text-xs text-error">{{ errors['accept_privacy'] }}</p>{% endif %}
+        </div>
+
+        <button type="submit" class="sm:col-span-2 mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold transition-colors shadow-md active:scale-95">
+          <span class="material-symbols-outlined text-[20px]" aria-hidden="true">mark_email_read</span>Crear cuenta y enviar código
+        </button>
+      </form>
+      <p class="mt-6 text-sm text-on-surface-variant text-center">
+        ¿Ya tienes cuenta? <a class="font-semibold text-primary underline underline-offset-2" href="{{ url_for('pages.login') }}">Ingresa</a>
+      </p>
+    </div>
+  </div>
+</main>
+{% endblock %}

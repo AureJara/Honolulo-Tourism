@@ -1,0 +1,21 @@
+# Entorno de desarrollo local (sin Docker). Instalar con:
+#   python -m venv .venv && .venv\Scripts\activate      (Windows)   |   source .venv/bin/activate   (Linux/macOS)
+#   pip install -r requirements-dev.txt
+-e libs/honolulo_common
+
+Flask>=3.0,<4
+Flask-SQLAlchemy>=3.1,<4
+Flask-Migrate>=4.0,<5
+SQLAlchemy>=2.0,<3
+psycopg[binary]>=3.1,<4
+marshmallow>=3.20,<4
+PyJWT>=2.8,<3
+requests>=2.31
+APScheduler>=3.10,<4
+tzdata
+Pillow>=10.3
+
+# Pruebas y PostgreSQL embebido (alternativa a Docker para desarrollo)
+pytest>=8
+responses>=0.25
+pgserver>=0.1

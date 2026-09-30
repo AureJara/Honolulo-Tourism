@@ -1,0 +1,96 @@
+# Honolulo — microservicios Flask + PostgreSQL.
+#   cp .env.example .env   (y completar los secretos)
+#   docker compose up --build
+# Solo el servicio `web` se publica (http://localhost:8000); el resto vive en la red interna.
+
+x-base-env: &base-env
+  APP_ENV: ${APP_ENV:-production}
+  LOCATION_LAT: ${LOCATION_LAT:--9.295556}
+  LOCATION_LON: ${LOCATION_LON:--75.9975}
+
+# Cada servicio recibe solo los secretos que necesita: `web` nunca conoce la clave JWT.
+x-jwt-env: &jwt-env
+  JWT_SECRET_KEY: ${JWT_SECRET_KEY:?defina JWT_SECRET_KEY}
+  INTERNAL_API_TOKEN: ${INTERNAL_API_TOKEN:?defina INTERNAL_API_TOKEN}
+
+services:
+  web:
+    build: { context: ., dockerfile: services/web/Dockerfile }
+    ports: ["8000:8000"]
+    environment:
+      <<: *base-env
+      WEB_SECRET_KEY: ${WEB_SECRET_KEY:?defina WEB_SECRET_KEY}
+      COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      AUTH_SERVICE_URL: http://auth:5001
+      WEATHER_SERVICE_URL: http://weather:5002
+      FORECAST_SERVICE_URL: http://forecast:5003
+      CATALOG_SERVICE_URL: http://catalog:5004
+      CONTACT_EMAIL: ${CONTACT_EMAIL:-contacto@honolulo-tingomaria.pe}
+    depends_on: [auth, weather, forecast, catalog]
+    restart: unless-stopped
+
+  auth:
+    build: { context: ., dockerfile: services/auth/Dockerfile }
+    environment:
+      <<: [*base-env, *jwt-env]
+      DATABASE_URL: postgresql+psycopg://auth_svc:${AUTH_DB_PASSWORD:?defina AUTH_DB_PASSWORD}@postgres:5432/auth_db
+      # Correo saliente real (código de confirmación). Con Gmail: smtp.gmail.com:587 + contraseña de aplicación.
+      MAIL_BACKEND: smtp
+      MAIL_FROM: ${MAIL_FROM:-Honolulo <no-reply@honolulo.local>}
+      SMTP_HOST: ${SMTP_HOST:?defina SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_SECURITY: ${SMTP_SECURITY:-starttls}
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+
+  weather:
+    build: { context: ., dockerfile: services/weather/Dockerfile }
+    environment:
+      <<: [*base-env, *jwt-env]
+      DATABASE_URL: postgresql+psycopg://weather_svc:${WEATHER_DB_PASSWORD:?defina WEATHER_DB_PASSWORD}@postgres:5432/weather_db
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+
+  forecast:
+    build: { context: ., dockerfile: services/forecast/Dockerfile }
+    environment:
+      <<: [*base-env, *jwt-env]
+      DATABASE_URL: postgresql+psycopg://forecast_svc:${FORECAST_DB_PASSWORD:?defina FORECAST_DB_PASSWORD}@postgres:5432/forecast_db
+      WEATHER_SERVICE_URL: http://weather:5002
+    depends_on:
+      postgres: { condition: service_healthy }
+      weather: { condition: service_started }
+    restart: unless-stopped
+
+  catalog:
+    build: { context: ., dockerfile: services/catalog/Dockerfile }
+    environment:
+      <<: [*base-env, *jwt-env]
+      DATABASE_URL: postgresql+psycopg://catalog_svc:${CATALOG_DB_PASSWORD:?defina CATALOG_DB_PASSWORD}@postgres:5432/catalog_db
+    volumes: ["media:/media"]
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD}
+      AUTH_DB_PASSWORD: ${AUTH_DB_PASSWORD}
+      WEATHER_DB_PASSWORD: ${WEATHER_DB_PASSWORD}
+      FORECAST_DB_PASSWORD: ${FORECAST_DB_PASSWORD}
+      CATALOG_DB_PASSWORD: ${CATALOG_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  media:

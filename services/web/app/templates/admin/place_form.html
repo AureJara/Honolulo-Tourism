@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar ' ~ place.name if place else 'Nuevo lugar' }} — Administración Honolulo{% endblock %}
+{% macro err(name) %}{% if errors.get(name) %}<p id="{{ name }}-error" class="text-xs text-error">{{ errors[name] }}</p>{% endif %}{% endmacro %}
+{% macro input_cls(name) %}w-full px-4 py-2.5 rounded-xl border {{ 'border-error' if errors.get(name) else 'border-outline-variant/60' }} bg-surface text-on-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container{% endmacro %}
+{% block content %}
+<main id="contenido" class="pt-28 pb-20">
+  <div class="max-w-5xl mx-auto px-6 md:px-10">
+    <a href="{{ url_for('admin.places') }}" class="inline-flex items-center gap-1 text-sm text-primary font-semibold underline underline-offset-2 mb-4">
+      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>Todos los lugares
+    </a>
+    <h1 class="font-headline text-3xl font-bold tracking-tight">{{ place.name if place else 'Nuevo lugar' }}</h1>
+
+    {% if error %}
+    <div role="alert" class="mt-4 p-3 rounded-lg bg-error-container text-on-error-container text-sm flex items-start gap-2">
+      <span class="material-symbols-outlined text-[18px] mt-0.5" aria-hidden="true">error</span><span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <div class="mt-6 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+      <!-- Datos del lugar -->
+      <section class="lg:col-span-7 bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-6" aria-labelledby="datos-titulo">
+        <h2 id="datos-titulo" class="font-headline text-lg font-bold mb-4">Información del lugar</h2>
+        <form method="post" action="{{ url_for('admin.place_edit', place_id=place.id) if place else url_for('admin.place_new') }}" class="grid grid-cols-1 sm:grid-cols-2 gap-4" novalidate>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+          <div class="sm:col-span-2 flex flex-col gap-1.5">
+            <label for="name" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Nombre</label>
+            <input id="name" name="name" required maxlength="120" value="{{ values.get('name', '') }}" class="{{ input_cls('name') }}" {% if errors.get('name') %}aria-invalid="true" aria-describedby="name-error"{% endif %}>
+            {{ err('name') }}
+          </div>
+
+          <div class="sm:col-span-2 flex flex-col gap-1.5">
+            <label for="description" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Descripción</label>
+            <textarea id="description" name="description" required rows="6" maxlength="2000" class="{{ input_cls('description') }}" {% if errors.get('description') %}aria-invalid="true" aria-describedby="description-error"{% endif %}>{{ values.get('description', '') }}</textarea>
+            <p class="text-xs text-tertiary">Entre 20 y 2000 caracteres. Se muestra como texto, sin formato.</p>
+            {{ err('description') }}
+          </div>
+
+          <div class="flex flex-col gap-1.5">
+            <label for="difficulty" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Dificultad</label>
+            <select id="difficulty" name="difficulty" class="{{ input_cls('difficulty') }}">
+              {% for value, label in difficulties %}<option value="{{ value }}" {{ 'selected' if values.get('difficulty', '') == value }}>{{ label }}</option>{% endfor %}
+            </select>{{ err('difficulty') }}
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="hike_minutes" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Caminata (minutos)</label>
+            <input id="hike_minutes" name="hike_minutes" inputmode="numeric" value="{{ values.get('hike_minutes', '') }}" class="{{ input_cls('hike_minutes') }}" {% if errors.get('hike_minutes') %}aria-invalid="true" aria-describedby="hike_minutes-error"{% endif %}>
+            {{ err('hike_minutes') }}
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="depth_label" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Etiqueta de profundidad</label>
+            <input id="depth_label" name="depth_label" maxlength="40" value="{{ values.get('depth_label', '') }}" placeholder="Piscina Natural" class="{{ input_cls('depth_label') }}">
+            {{ err('depth_label') }}
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col gap-1.5">
+              <label for="depth_min_m" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Prof. mín. (m)</label>
+              <input id="depth_min_m" name="depth_min_m" inputmode="decimal" value="{{ values.get('depth_min_m', '') }}" class="{{ input_cls('depth_min_m') }}" {% if errors.get('depth_min_m') %}aria-invalid="true" aria-describedby="depth_min_m-error"{% endif %}>
+              {{ err('depth_min_m') }}
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label for="depth_max_m" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Prof. máx. (m)</label>
+              <input id="depth_max_m" name="depth_max_m" inputmode="decimal" value="{{ values.get('depth_max_m', '') }}" class="{{ input_cls('depth_max_m') }}" {% if errors.get('depth_max_m') %}aria-invalid="true" aria-describedby="depth_max_m-error"{% endif %}>
+              {{ err('depth_max_m') }}
+            </div>
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="status" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Estado</label>
+            <select id="status" name="status" class="{{ input_cls('status') }}">
+              {% for value, label in statuses %}<option value="{{ value }}" {{ 'selected' if values.get('status', 'draft') == value }}>{{ label }}</option>{% endfor %}
+            </select>{{ err('status') }}
+          </div>
+          <div class="flex flex-col gap-1.5">
+            <label for="sort_order" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Orden</label>
+            <input id="sort_order" name="sort_order" inputmode="numeric" value="{{ values.get('sort_order', 0) }}" class="{{ input_cls('sort_order') }}">
+            {{ err('sort_order') }}
+          </div>
+
+          <div class="sm:col-span-2 flex items-center justify-end gap-3 pt-2">
+            {% if place and place.status == 'published' %}<a href="{{ url_for('pages.index') }}#lugares" class="text-sm text-primary underline underline-offset-2">Ver en el sitio</a>{% endif %}
+            <button type="submit" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold transition-colors shadow-md active:scale-95">
+              <span class="material-symbols-outlined text-[20px]" aria-hidden="true">save</span>{{ 'Guardar cambios' if place else 'Crear lugar' }}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- Fotos -->
+      {% if place %}
+      <section class="lg:col-span-5 flex flex-col gap-6" aria-labelledby="fotos-titulo">
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-6">
+          <h2 id="fotos-titulo" class="font-headline text-lg font-bold mb-1">Fotos ({{ place.photos | length }})</h2>
+          <p class="text-xs text-tertiary mb-4">JPEG, PNG o WebP de hasta {{ max_photo_mb }} MB. La portada es la foto principal.</p>
+
+          <ul class="flex flex-col gap-4">
+          {% for ph in place.photos %}
+            <li class="rounded-lg border border-outline-variant/30 p-3 flex flex-col gap-3">
+              <div class="flex gap-3">
+                <img src="{{ ph.thumb_url }}" alt="{{ ph.alt }}" width="112" height="84" loading="lazy" class="w-28 h-[84px] object-cover rounded-lg bg-surface-container">
+                <div class="flex-1 min-w-0">
+                  {% if ph.is_cover %}<span class="inline-block px-2 py-0.5 rounded-full bg-secondary-container text-on-secondary-container text-xs font-semibold">Portada</span>{% endif %}
+                  <form method="post" action="{{ url_for('admin.photo_alt', photo_id=ph.id) }}" class="mt-1 flex gap-2">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="place_id" value="{{ place.id }}">
+                    <label class="sr-only" for="alt-{{ ph.id }}">Texto alternativo</label>
+                    <input id="alt-{{ ph.id }}" name="alt_text" value="{{ ph.alt }}" maxlength="200" required class="flex-1 min-w-0 px-2 py-1.5 rounded-lg border border-outline-variant/60 bg-surface text-xs">
+                    <button class="px-2 py-1 rounded-lg border border-outline-variant/60 text-xs font-semibold hover:bg-surface-container-low" type="submit">Guardar</button>
+                  </form>
+                </div>
+              </div>
+              <div class="flex items-center justify-end gap-2 text-xs">
+                {% if not ph.is_cover %}
+                <form method="post" action="{{ url_for('admin.photo_cover', photo_id=ph.id) }}">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="place_id" value="{{ place.id }}">
+                  <button type="submit" class="px-2.5 py-1 rounded-lg border border-outline-variant/60 font-semibold hover:bg-surface-container-low">Hacer portada</button>
+                </form>
+                {% endif %}
+                <form method="post" action="{{ url_for('admin.photo_delete', photo_id=ph.id) }}" onsubmit="return confirm('¿Eliminar esta foto? No se puede deshacer.');">
+                  <input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="place_id" value="{{ place.id }}">
+                  <button type="submit" class="px-2.5 py-1 rounded-lg border border-error/50 text-error font-semibold hover:bg-error-container">Eliminar</button>
+                </form>
+              </div>
+            </li>
+          {% else %}
+            <li class="text-sm text-on-surface-variant">Este lugar aún no tiene fotos.</li>
+          {% endfor %}
+          </ul>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-6">
+          <h2 class="font-headline text-lg font-bold mb-3">Subir una foto</h2>
+          <form method="post" action="{{ url_for('admin.photo_upload', place_id=place.id) }}" enctype="multipart/form-data" class="flex flex-col gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="flex flex-col gap-1.5">
+              <label for="file" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Archivo</label>
+              <input id="file" name="file" type="file" accept="image/jpeg,image/png,image/webp" required class="text-sm">
+            </div>
+            <div class="flex flex-col gap-1.5">
+              <label for="alt_text" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Descripción de la foto</label>
+              <input id="alt_text" name="alt_text" required minlength="3" maxlength="200" placeholder="Catarata con pozas esmeralda" class="px-3 py-2 rounded-xl border border-outline-variant/60 bg-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+              <p class="text-xs text-tertiary">La leen los lectores de pantalla.</p>
+            </div>
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="is_cover" class="rounded border-outline-variant text-primary focus:ring-primary"> Usar como portada</label>
+            <button type="submit" class="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-secondary-container hover:bg-secondary-fixed text-on-secondary-fixed font-headline font-semibold text-sm transition-colors">
+              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">upload</span>Subir foto
+            </button>
+          </form>
+        </div>
+
+        <div class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm p-6">
+          <h2 class="font-headline text-lg font-bold mb-3">Historial de cambios</h2>
+          {% if history %}
+          <ol class="flex flex-col gap-2 text-xs text-on-surface-variant">
+            {% for h in history %}
+            <li><span class="font-semibold text-on-surface">{{ h.actor_name or 'Administrador' }}</span> · {{ {'created': 'creó el lugar', 'updated': 'editó ' ~ (h.changes.keys() | list | join(', ')), 'photo_added': 'subió una foto', 'photo_updated': 'editó una foto', 'photo_deleted': 'eliminó una foto'}.get(h.action, h.action) }} <span class="text-tertiary">({{ h.created_at[:16] | replace('T', ' ') }} UTC)</span></li>
+            {% endfor %}
+          </ol>
+          {% else %}<p class="text-sm text-on-surface-variant">Aún no hay cambios registrados.</p>{% endif %}
+        </div>
+      </section>
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}
