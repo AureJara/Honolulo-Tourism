@@ -4,24 +4,108 @@ Implementación del [`spec.md`](spec.md): microservicios **Flask + PostgreSQL** 
 pronóstico de Honolulo (Tingo María) con calendario según el diseño, **evaluación de la precisión de los pronósticos**,
 catálogo de lugares editable por un administrador y registro de usuarios con confirmación de correo.
 
+## Arquitectura
+
+El sistema implementa una arquitectura orientada a **microservicios desacoplados** desarrollada con **Flask** y **PostgreSQL 16**, siguiendo el patrón *Database-per-Service*. La superficie de ataque externa está estrictamente delimitada: únicamente el servicio `web` expone puertos al exterior actuando como servidor web y API Gateway, mientras que los microservicios de dominio operan en una red interna privada.
+
+### Diagrama de arquitectura
+
+```mermaid
+flowchart TD
+    subgraph CLIENT["Capa de Cliente"]
+        USER["Navegador Web / Cliente\n(Visitantes, Usuarios autenticados, Admin)"]
+    end
+
+    subgraph GATEWAY["Capa Perimetral y Servidor Web"]
+        WEB["web (Flask :8000)\nUI, API Gateway /api/v1, Proxy de Medios\nGestor de sesión y cookies HttpOnly"]
+    end
+
+    subgraph BACKEND["Capa de Microservicios (Red Interna)"]
+        AUTH["auth-service (:5001)\nRegistro, Verificación OTP por email\nLogin, Emisión y Rotación JWT"]
+        WEATHER["weather-service (:5002)\nClima actual, Historial observado\nSerie horaria de observaciones"]
+        FORECAST["forecast-service (:5003)\nPronósticos diarios y horarios\nCalendario y Evaluación de precisión"]
+        CATALOG["catalog-service (:5004)\nCatálogo de lugares y rutas turísticas\nProcesamiento WebP y Auditoría"]
+    end
+
+    subgraph COMMON["Librería Compartida"]
+        HONOLULO_COMMON["libs/honolulo_common\nRFC 7807, Validador JWT, Cliente Open-Meteo\nCoordenadas, Condiciones y Utilidades"]
+    end
+
+    subgraph DATA["Capa de Persistencia y Almacenamiento (PostgreSQL 16)"]
+        AUTH_DB[("auth_db\nCuentas, códigos OTP, tokens")]
+        WEATHER_DB[("weather_db\nObservaciones y caché de clima")]
+        FORECAST_DB[("forecast_db\nPronósticos y evaluaciones")]
+        CATALOG_DB[("catalog_db\nLugares, rutas, fotos y auditoría")]
+        MEDIA_VOL[("media (Volumen Docker)\nImágenes WebP sin metadatos")]
+    end
+
+    subgraph EXTERNAL["Servicios e Integraciones Externas"]
+        OPENMETEO["API Open-Meteo\n(Datos climáticos y pronósticos)"]
+        SMTP["Servidor SMTP\n(Envío de códigos de 6 dígitos)"]
+    end
+
+    %% Flujos de Cliente a Web
+    USER <-->|"HTTP / HTTPS\nCookies HttpOnly + CSRF"| WEB
+
+    %% Flujos de Web Gateway a Microservicios
+    WEB -->|"POST /auth/* (Registro, OTP, Login, Refresh)"| AUTH
+    WEB -->|"GET, POST /api/v1/weather/* (Bearer JWT)"| WEATHER
+    WEB -->|"GET, PUT /api/v1/weather/forecast/* (Bearer JWT)"| FORECAST
+    WEB -->|"GET /api/v1/places, /admin/* (Bearer JWT)"| CATALOG
+    WEB -->|"GET /media/{clave} (Proxy a catálogo)"| CATALOG
+
+    %% Comunicación inter-servicio
+    FORECAST -->|"GET /internal/observations\n(Cabecera: INTERNAL_API_TOKEN)"| WEATHER
+
+    %% Librería compartida
+    HONOLULO_COMMON -.-> AUTH
+    HONOLULO_COMMON -.-> WEATHER
+    HONOLULO_COMMON -.-> FORECAST
+    HONOLULO_COMMON -.-> CATALOG
+    HONOLULO_COMMON -.-> WEB
+
+    %% Microservicios a Bases de Datos
+    AUTH -->|"psycopg / auth_svc"| AUTH_DB
+    WEATHER -->|"psycopg / weather_svc"| WEATHER_DB
+    FORECAST -->|"psycopg / forecast_svc"| FORECAST_DB
+    CATALOG -->|"psycopg / catalog_svc"| CATALOG_DB
+    CATALOG -->|"Lectura / Escritura"| MEDIA_VOL
+
+    %% Microservicios a Servicios Externos
+    AUTH -->|"SMTP / STARTTLS (Puerto 587)"| SMTP
+    WEATHER -->|"HTTPS / REST"| OPENMETEO
+    FORECAST -->|"HTTPS / REST"| OPENMETEO
 ```
-Navegador ──▶ web (Flask: UI + pasarela /api/v1 + /media) ──┬─▶ auth-service      ──▶ auth_db     (correo con código)
-   cookies HttpOnly                                          ├─▶ weather-service   ──▶ weather_db  ──▶ API externa de clima
-                                                             ├─▶ forecast-service  ──▶ forecast_db ──▶ API externa de clima
-                                                             │        └──▶ weather-service (/internal/observations)
-                                                             └─▶ catalog-service   ──▶ catalog_db  + fotos (volumen)
-```
+
+### Componentes y responsabilidades
 
 | Servicio | Puerto | Responsabilidad | Spec |
 |---|---|---|---|
-| `web` | 8000 | Pantallas, pasarela de la API, sesión por cookies `HttpOnly`, renovación de tokens, panel de administración | RF01–RF07 (UI), Esc. 6–8 (UI) |
+| `web` | 8000 | Pantallas (Jinja2 + Tailwind), pasarela de la API (`/api/v1`), sesión por cookies `HttpOnly`, renovación de tokens y panel de administración | RF01–RF07 (UI), Esc. 6–8 (UI) |
 | `auth-service` | 5001 | Registro (nombre y apellido reales, consentimiento), **código de 6 dígitos por correo**, login, JWT + refresh rotatorio | RF01, Esc. 7 y 8 |
-| `weather-service` | 5002 | Clima actual, historial, refresco, serie horaria observada | RF02, RF03, RF06–RF08, RN04, RN08 |
-| `forecast-service` | 5003 | Pronósticos (solo inserción), calendario, evaluación y puntuación parametrizable | RF04, RF05, RF09–RF11 |
-| `catalog-service` | 5004 | Lugares (cascadas), fotos (validadas y re-codificadas a WebP), auditoría de cambios | Esc. 6 |
-| `libs/honolulo_common` | — | Errores RFC 7807, JWT, cliente del proveedor, condiciones | — |
+| `weather-service` | 5002 | Clima actual, historial, refresco, serie horaria observada y endpoint interno `/internal/observations` | RF02, RF03, RF06–RF08, RN04, RN08 |
+| `forecast-service` | 5003 | Pronósticos (solo inserción), calendario, evaluación y puntuación parametrizable de precisión | RF04, RF05, RF09–RF11 |
+| `catalog-service` | 5004 | Lugares (cascadas/rutas), fotos (validadas y re-codificadas a WebP sin metadatos) y auditoría de cambios | Esc. 6 |
+| `libs/honolulo_common` | — | Errores RFC 7807 (`application/problem+json`), validación JWT, cliente Open-Meteo y utilidades comunes | — |
 
-Cada servicio tiene **su propia base de datos** (sin claves foráneas entre servicios).
+### Principios y patrones arquitectónicos
+
+1. **Patrón API Gateway y Perímetro Seguro (`web`)**:
+   - Es el único punto de entrada público expuesto (`:8000`). Los microservicios de backend no exponen puertos al host.
+   - El cliente se comunica exclusivamente mediante cookies de sesión `HttpOnly` y protección contra CSRF con token dedicado.
+   - Aplica el principio de menor privilegio: `web` **no conoce** la clave secreta `JWT_SECRET_KEY`. Su rol es intermediar peticiones, inyectar el token Bearer recibido de `auth-service` hacia los microservicios protegidos y orquestar la rotación transparente de credenciales.
+
+2. **Aislamiento de Persistencia (Database-per-Service)**:
+   - Cada microservicio posee su propia base de datos física (`auth_db`, `weather_db`, `forecast_db`, `catalog_db`) con usuarios dedicados (`auth_svc`, `weather_svc`, etc.) y esquemas independientes.
+   - No existen claves foráneas ni dependencias directas a nivel de base de datos entre servicios distintos.
+
+3. **Comunicación Inter-Servicio y Seguridad**:
+   - Peticiones autenticadas hacia servicios de dominio emplean tokens JWT firmados con algoritmo HS256.
+   - La sincronización entre `forecast-service` y `weather-service` (para obtener observaciones reales contra las cuales evaluar la precisión) se realiza vía HTTP interno mediante el endpoint `/internal/observations`, autenticado por una clave precompartida (`INTERNAL_API_TOKEN`).
+
+4. **Gestión de Medios y Multimedia**:
+   - La carga, validación binaria profunda (inspección de cabeceras mágicas, rechazo de formatos no válidos o metadatos EXIF/GPS) y re-codificación a formato WebP son gestionadas por `catalog-service`.
+   - Los archivos se almacenan en un volumen Docker persistente (`media`), y son servidos eficientemente hacia los clientes a través del endpoint de proxy `/media/{clave}` en `web` con cabeceras de caché inmutable y soporte de ETag.
 
 ## Cómo ejecutarlo
 
