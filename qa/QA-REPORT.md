@@ -1,11 +1,11 @@
-# Informe de QA — Honolulo (spec actualizado con los Escenarios 6, 7 y 8)
+# Informe de QA — Honolulo (Escenarios 6, 7 y 8 + opiniones, moderación, políticas y seguridad reforzada)
 
 | | |
 |---|---|
-| **Fecha** | 2026-09-30 |
+| **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
-| **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` |
-| **Resultado** | **530 pruebas automatizadas en verde** (412 unitarias/integración + 118 de QA de extremo a extremo) y 8 defectos encontrados y corregidos (ninguno crítico) |
+| **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
+| **Resultado** | **799 pruebas automatizadas en verde** (634 unitarias/integración + 165 de QA de extremo a extremo) y 16 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,30 +14,35 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad), validación, permisos, PostgreSQL real (no SQLite) | `libs/*/tests`, `services/*/tests` — 412 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 634 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
 | Sesión | Renovación transparente, concurrencia de refrescos, varios dispositivos | `qa/test_session.py` — 6 |
 | Integridad de datos | Restricciones de PostgreSQL ante datos inválidos | `qa/test_db_integrity.py` — 16 |
 | Rendimiento (humo) | Latencia p50/p95 secuencial y con 10 usuarios concurrentes | `qa/test_performance.py` — 12 |
+| Opiniones y moderación (nuevo) | Publicar/editar/eliminar, validación y abuso, permisos, fijar (límite 3, concurrencia), eliminar con auditoría, HTML escapado | `qa/test_reviews_e2e.py` — 23 |
+| Entrega del correo (nuevo) | Servicio de cuentas real enviando por SMTP: el código llega al correo registrado, confirma la cuenta, fallos del servidor de correo | `qa/test_email_delivery.py` — 6 |
+| Privacidad y secretos (nuevo) | La contraseña «canario» no aparece en registros, base ni correo; solo hash del código; políticas publicadas; cookies declaradas; cabeceras; ningún secreto expuesto | `qa/test_privacy_secrets.py` — 18 |
 | Exploratoria en navegador | Flujos reales, teclado, móvil (375 px), XSS en interfaz, **axe-core** (WCAG 2.1 AA) | manual, evidencia en §4 |
 
 ## 2. Resultados
 
 | Suite | Pruebas | Resultado |
 |---|---:|---|
-| `honolulo_common` | 25 | ✅ |
-| `auth-service` | 87 | ✅ |
-| `weather-service` | 27 | ✅ |
-| `forecast-service` | 85 | ✅ |
-| `catalog-service` | 92 | ✅ |
-| `web` | 96 | ✅ |
+| Revisión de secretos en el código (`scripts/check_secrets.py`) | — | ✅ |
+| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco) | 79 | ✅ |
+| `auth-service` | 118 | ✅ |
+| `weather-service` | 30 | ✅ |
+| `forecast-service` | 88 | ✅ |
+| `catalog-service` | 179 | ✅ |
+| `web` | 140 | ✅ |
 | QA: aceptación / seguridad / resiliencia / sesión / integridad / rendimiento | 28 / 49 / 7 / 6 / 16 / 12 | ✅ |
+| QA nuevo: opiniones y moderación / entrega de correo / privacidad y secretos | 23 / 6 / 18 | ✅ |
 
 **Rendimiento medido** (servidor de desarrollo de Flask, una instancia): p95 secuencial entre 63 y 91 ms en clima actual, calendario, pronóstico del día, historial y lugares; con 10 usuarios concurrentes p95 ≤ 150 ms y **0 errores**. Página principal p95 30 ms.
 
-**Accesibilidad (axe-core 4.10, WCAG 2.0/2.1 A y AA + buenas prácticas):** 0 violaciones en la pantalla principal, registro y administración (lista y edición) tras las correcciones.
+**Accesibilidad (axe-core, WCAG 2.0/2.1 A y AA):** 0 violaciones en la pantalla principal, registro, administración (lista y edición, ahora con la sección de opiniones), la **ventana de opiniones** y las **políticas** tras las correcciones. En móvil (375 px) no hay desbordamiento horizontal y la ventana cabe en la pantalla.
 
 ## 3. Trazabilidad con el spec
 
@@ -55,6 +60,11 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Escenario 6 (administrador: descripciones y fotos) | `test_photos.py`, `test_places.py`, `test_admin.py`, `test_scenario6_*` (edición desde la interfaz real + subida de foto + el visitante la ve), permisos por rol, auditoría de cambios |
 | Escenario 7 (correo con código + consentimiento) | `test_registration.py`, `test_scenario7_*`: código de 6 dígitos por correo, sin sesión hasta confirmar, 5 intentos máximo, vencimiento, reenvío limitado, consentimiento obligatorio y registrado con versión, alias de Gmail |
 | Escenario 8 (nombre y apellido reales) | `test_scenario8_*`: obligatorios y con validación de plausibilidad (se rechazan «Test», «aaaa», dígitos, HTML…) |
+| Opiniones y puntuación (visitantes) | `test_reviews.py` (78), `test_reviews_web.py`, `qa/test_reviews_e2e.py`: una por persona y lugar, 1–5 estrellas enteras, comentario opcional ≤ 1000 sin enlaces, nombre público «Nombre I.», sin datos personales en la salida, promedio y distribución |
+| Rol de administrador: fijar y eliminar comentarios (además de cambiar imágenes) | permisos 401/403, fijar con tope de 3 por lugar (también con 8 peticiones simultáneas), orden, eliminar con auditoría **sin conservar el texto**, moderación desde la ventana pública y desde `/admin/lugares/<lugar>` |
+| Código de confirmación al correo del usuario | `test_hardening.py` + `qa/test_email_delivery.py`: el mensaje llega por SMTP **autenticado** a la dirección registrada, el código confirma la cuenta, un código distinto por persona, errores del servidor de correo → 503 claro, el código y la clave SMTP no salen en respuestas ni registros |
+| Contraseñas que solo conoce el usuario | hash con sal, nunca en registros/base/correo (prueba «canario» en vivo), política (mín. 10, no comunes, sin nombre/correo), `create-admin` con contraseña oculta y la misma política, escáner de secretos en el código, servicios que no arrancan sin secretos fuertes |
+| Políticas de privacidad y de cookies | contenido verificado (opiniones, correo, seguridad, moderación, ARCO), tabla de las 4 cookies reales (y prueba de que no se emite ninguna otra), aviso descartable, enlaces en el pie y versión 2026-10-03 registrada |
 
 ## 4. Defectos encontrados
 
@@ -69,7 +79,38 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | **D7** | Media (operación) | `scripts/dev.py` dejaba **procesos huérfanos** (en Windows el lanzador del venv crea un hijo que `terminate()` no alcanza) que seguían sirviendo código antiguo y compartían el puerto sin avisar. | Un `readyz` sin `catalog` tras reiniciar | ✅ Corregido: verificación previa de puertos y cierre del árbol de procesos |
 | **D8** | Baja (herramientas) | El PostgreSQL temporal de las pruebas podía quedar corrupto (se borran carpetas de `%TEMP%`) y las suites fallaban en bloque. | Falla masiva de la suite | ✅ Corregido: se recrea solo |
 
+### Segunda ronda (2026-10-03)
+
+| ID | Sev. | Hallazgo | Cómo se detectó | Estado |
+|---|:-:|---|---|---|
+| **D9** | Media (seguridad) | El archivo nuevo de secretos locales (`.env.local`) **no estaba en `.gitignore`**: un `git add .` habría subido las claves. | Prueba de higiene `test_local_secret_and_data_files_are_ignored_by_git`, antes de crear el archivo | ✅ Corregido |
+| **D10** | Media (seguridad) | El escáner de secretos **ignoraba** `os.getenv("JWT_SECRET_KEY", "dev-secret-change-me")` porque tomaba «change-me» como marcador de posición: no habría detectado justo lo que se quería eliminar. | Su propia prueba unitaria | ✅ Corregido (marcadores anclados) |
+| **D11** | Media (seguridad) | `create-admin` **no aplicaba la política de contraseñas** (ni el método de hash configurado) y pedía una contraseña aunque solo se promoviera una cuenta existente (sin efecto: engañoso). | Revisión de código | ✅ Corregido + 3 pruebas |
+| **D12** | Media (robustez) | Si fallaba la carga de opiniones, la pantalla de edición de un lugar devolvía 503 entera. | Fallaron pruebas existentes al añadir la sección | ✅ Corregido: la edición no depende de las opiniones |
+| **D13** | Baja (UX) | Tras cerrar la ventana de opiniones la página quedaba sin poder desplazarse si el evento `close` se retrasaba (bloqueo mediante una clase puesta por JavaScript). | Exploración en navegador | ✅ Corregido: regla CSS `html:has(dialog[open])` + regresión |
+| **D14** | Media (a11y) | La tabla de cookies (región con scroll) no se podía enfocar con el teclado (axe: `scrollable-region-focusable`). | axe-core | ✅ Corregido (`role="region"`, `tabindex="0"`) + regresión |
+| **D15** | Media (operación) | Tras un cierre brusco (apagón, ventana cerrada) PostgreSQL tarda más de 10 s en recuperarse y `dev.py up` fallaba con `TimeoutExpired`; había que repetir el comando a mano. | Ocurrió varias veces durante las pruebas; reproducido matando PostgreSQL de golpe | ✅ Corregido: `dev.py` espera la recuperación (hasta 3 min), explica qué pasa y continúa solo + 3 pruebas |
+| **D16** | Baja (pruebas) | La contraseña aleatoria de QA podía contener un fragmento del correo de prueba (1 de cada 256 ejecuciones) y la nueva política la rechazaba: una prueba fallaba al azar. | Falla intermitente de `test_scenario7_gmail_aliases…` | ✅ Corregido: contraseña independiente del esquema de correos |
+
 Defectos adicionales atrapados por las propias pruebas antes de llegar a QA: los dígitos Unicode de ancho completo pasaban la validación del código (regex `\d`); la bomba de píxeles se rechazaba con un mensaje engañoso.
+
+### Revisión de diseño (SOLID)
+
+Tras la segunda ronda se revisó el código nuevo contra SOLID y se corrigió lo que no cumplía el principio
+abierto/cerrado o de responsabilidad única, **sin cambiar el comportamiento** (todas las pruebas de antes siguen en verde):
+
+| Hallazgo | Corrección | Prueba que lo demuestra |
+|---|---|---|
+| El envío de correo elegía el backend con una cadena `if/elif` por nombre | registro `@register_backend` (con `external`) y `@register_smtp_security`; `send` no cambia al añadir otro | `test_extensibility.py` (auth) |
+| Un `SMTP_SECURITY` mal escrito (p. ej. `startls`) se trataba como texto plano | ahora es un error explícito | `test_a_misspelled_smtp_security_never_degrades_to_plain_text` |
+| Las reglas de contraseña eran una función con pasos fijos | lista de reglas `@password_rule` | `test_a_new_password_rule_is_enforced…` |
+| La validación del comentario mezclaba limpieza y reglas en una función | saneadores y reglas registrables (`review_schemas.py`) | `test_review_extensibility.py` |
+| `service.py` y `api.py` del catálogo mezclaban lugares, fotos y opiniones | módulos `reviews.py`, `reviews_api.py`, `review_schemas.py`, `permissions.py`, `responses.py`, `text.py` | suites existentes |
+| La lógica de opiniones dependía de `flask.g` | recibe quién actúa (`claims`) como parámetro | `test_the_review_domain_works_without_an_http_request` |
+| La web mezclaba clima, opiniones y administración en `api.py` y `admin.py` | `reviews_api.py`, `admin_reviews.py`, `admin_common.py`, `relay.py`, `validators.py` | suites existentes |
+| `weather` y `forecast` creaban directamente el cliente de Open-Meteo y guardaban su nombre fijo: cambiar de proveedor obligaba a editar ambos servicios | interfaz `WeatherProvider` + registro `@register_provider`, elección con `WEATHER_PROVIDER`; el nombre del proveedor lo da el propio cliente | `test_weather_provider.py`, `test_provider_wiring.py` |
+| `dev.py` despachaba comandos con `if/elif` | tabla `@command` | `test_a_new_dev_command_needs_no_change_to_main` |
+| El servidor SMTP de pruebas y el JS de la ventana de opiniones despachaban con cadenas de `if` | métodos `do_<VERBO>` y tabla `ACTIONS` | `test_dialog_buttons_dispatch_through_an_action_table` |
 
 ## 5. Observaciones (no son defectos) y riesgos aceptados
 
@@ -78,24 +119,28 @@ Defectos adicionales atrapados por las propias pruebas antes de llegar a QA: los
 - **Un access token sigue válido hasta 15 min tras cerrar sesión** (JWT sin estado); el *refresh* sí se revoca de inmediato.
 - Cabecera `Server: Werkzeug/…` visible: solo en el servidor de desarrollo; en producción usa gunicorn tras un proxy.
 - Varias cuentas pueden iniciar sesión a la vez; cerrar una no cierra las demás (verificado).
+- **La suite de QA abre unas 2 400 conexiones por ejecución** y en Windows quedan en `TIME_WAIT` unos 2 minutos: dos ejecuciones seguidas pueden agotar los puertos locales (`WinError 10048`) y hacer fallar una prueba al azar (pasa sola). Esperar ~2 min entre corridas completas.
+- **Las opiniones se moderan después de publicarse** (no hay cola previa) y solo se bloquean los enlaces: no hay filtro de insultos.
+- **Una cuenta antigua creada por línea de comandos** (`ejemplo@gmail.com`) conserva una contraseña más corta que el mínimo actual: la política se aplica al registrarse y al crear administradores, no retroactivamente.
+- Quien ya tenía cuenta aceptó la política anterior; no se le pide aceptar la nueva (queda la versión registrada por cuenta).
 
 ## 6. Lo que NO se probó (y conviene antes de producción)
 
-1. **Entrega real de correo**: en desarrollo el mensaje se guarda en `.mail/`. Falta probar SMTP (p. ej. Gmail con *contraseña de aplicación*) y su entrega a bandejas reales.
+1. **Entrega real de correo a Gmail**: se probó de punta a punta contra un servidor SMTP local (autenticación, destinatario correcto, fallos), pero **no** contra Gmail ni en bandejas reales (no hay credenciales en el entorno). Usar `python scripts/dev.py setup-mail` y `test-mail` con la cuenta real; revisar también la carpeta de spam.
 2. **«Loguear con cuentas de Gmail»** se implementó como correo (Gmail o cualquier otro) confirmado con código. **No** hay «Iniciar sesión con Google» (OAuth); requiere credenciales de Google Cloud.
 3. **Docker**: los `Dockerfile` y `docker-compose.yml` no se construyeron (no hay Docker en el equipo).
 4. **Navegadores y dispositivos**: solo Chromium; sin lectores de pantalla reales ni dispositivos físicos.
 5. **Carga**: solo humo con 10 concurrentes; sin pruebas de estrés/soak ni servidor de producción (gunicorn).
-6. **Política de privacidad**: es un texto base; requiere revisión legal (Ley N.° 29733).
+6. **Políticas de privacidad y de cookies**: son textos base; requieren revisión legal (Ley N.° 29733) y un correo de contacto real (`CONTACT_EMAIL`).
 7. **Datos de fotos reales**: las cascadas del diseño muestran un marcador hasta que el administrador suba fotos.
 8. Sin herramientas externas de pentesting (ZAP/Burp); la batería de seguridad es manual/automatizada propia.
 
 ## 7. Cómo reproducirlo
 
 ```bash
-python scripts/dev.py up                       # sistema completo (otra terminal)
-python scripts/run_tests.py                    # 412 pruebas unitarias y de integración
-cd qa && QA_ADMIN_EMAIL=<admin> QA_ADMIN_PASSWORD=<clave> python -m pytest -q     # 118 pruebas de QA
+python scripts/dev.py up --mail file          # sistema completo (otra terminal); la QA lee los códigos de .mail/
+python scripts/run_tests.py                    # revisión de secretos + 634 pruebas unitarias y de integración
+cd qa && python -m pytest -q                   # 165 pruebas de QA de extremo a extremo
 ```
 
-Las pruebas de administración se omiten si no se define una cuenta administradora (`python -m flask --app app:create_app set-role <correo> admin` en `services/auth`).
+Las pruebas de administración crean una **cuenta administradora temporal** (registro + código del correo + promoción en la base) y la desactivan al terminar; si prefieres una existente, define `QA_ADMIN_EMAIL` y `QA_ADMIN_PASSWORD`. Las pruebas de opiniones crean datos reales en la base de desarrollo y los eliminan al terminar.

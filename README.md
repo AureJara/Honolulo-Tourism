@@ -2,7 +2,8 @@
 
 Implementación del [`spec.md`](spec.md): microservicios **Flask + PostgreSQL** que muestran el clima actual y el
 pronóstico de Honolulo (Tingo María) con calendario según el diseño, **evaluación de la precisión de los pronósticos**,
-catálogo de lugares editable por un administrador y registro de usuarios con confirmación de correo.
+catálogo de lugares editable por un administrador, **opiniones y puntuación (1 a 5 estrellas) de los visitantes con
+moderación del administrador** (fijar o eliminar comentarios) y registro de usuarios con confirmación de correo.
 
 ## Arquitectura
 
@@ -17,25 +18,25 @@ flowchart TD
     end
 
     subgraph GATEWAY["Capa Perimetral y Servidor Web"]
-        WEB["web (Flask :8000)\nUI, API Gateway /api/v1, Proxy de Medios\nGestor de sesión y cookies HttpOnly"]
+        WEB["web (Flask :8000)\nUI, API Gateway /api/v1, Proxy de Medios\nOpiniones y moderación, políticas\nGestor de sesión y cookies HttpOnly"]
     end
 
     subgraph BACKEND["Capa de Microservicios (Red Interna)"]
         AUTH["auth-service (:5001)\nRegistro, Verificación OTP por email\nLogin, Emisión y Rotación JWT"]
         WEATHER["weather-service (:5002)\nClima actual, Historial observado\nSerie horaria de observaciones"]
         FORECAST["forecast-service (:5003)\nPronósticos diarios y horarios\nCalendario y Evaluación de precisión"]
-        CATALOG["catalog-service (:5004)\nCatálogo de lugares y rutas turísticas\nProcesamiento WebP y Auditoría"]
+        CATALOG["catalog-service (:5004)\nCatálogo de lugares y rutas turísticas\nOpiniones, puntuación y moderación\nProcesamiento WebP y Auditoría"]
     end
 
     subgraph COMMON["Librería Compartida"]
-        HONOLULO_COMMON["libs/honolulo_common\nRFC 7807, Validador JWT, Cliente Open-Meteo\nCoordenadas, Condiciones y Utilidades"]
+        HONOLULO_COMMON["libs/honolulo_common\nRFC 7807, Validador JWT\nInterfaz WeatherProvider (+ Open-Meteo)\nCoordenadas, Condiciones y Utilidades"]
     end
 
     subgraph DATA["Capa de Persistencia y Almacenamiento (PostgreSQL 16)"]
         AUTH_DB[("auth_db\nCuentas, códigos OTP, tokens")]
         WEATHER_DB[("weather_db\nObservaciones y caché de clima")]
         FORECAST_DB[("forecast_db\nPronósticos y evaluaciones")]
-        CATALOG_DB[("catalog_db\nLugares, rutas, fotos y auditoría")]
+        CATALOG_DB[("catalog_db\nLugares, rutas, fotos, opiniones y auditoría")]
         MEDIA_VOL[("media (Volumen Docker)\nImágenes WebP sin metadatos")]
     end
 
@@ -51,7 +52,7 @@ flowchart TD
     WEB -->|"POST /auth/* (Registro, OTP, Login, Refresh)"| AUTH
     WEB -->|"GET, POST /api/v1/weather/* (Bearer JWT)"| WEATHER
     WEB -->|"GET, PUT /api/v1/weather/forecast/* (Bearer JWT)"| FORECAST
-    WEB -->|"GET /api/v1/places, /admin/* (Bearer JWT)"| CATALOG
+    WEB -->|"GET /api/v1/places y /reviews (público)\nPUT, DELETE /reviews/mine y /admin/* (Bearer JWT)"| CATALOG
     WEB -->|"GET /media/{clave} (Proxy a catálogo)"| CATALOG
 
     %% Comunicación inter-servicio
@@ -73,39 +74,43 @@ flowchart TD
 
     %% Microservicios a Servicios Externos
     AUTH -->|"SMTP / STARTTLS (Puerto 587)"| SMTP
-    WEATHER -->|"HTTPS / REST"| OPENMETEO
-    FORECAST -->|"HTTPS / REST"| OPENMETEO
+    WEATHER -->|"HTTPS / REST (vía WeatherProvider)"| OPENMETEO
+    FORECAST -->|"HTTPS / REST (vía WeatherProvider)"| OPENMETEO
 ```
 
 ### Componentes y responsabilidades
 
 | Servicio | Puerto | Responsabilidad | Spec |
 |---|---|---|---|
-| `web` | 8000 | Pantallas (Jinja2 + Tailwind), pasarela de la API (`/api/v1`), sesión por cookies `HttpOnly`, renovación de tokens y panel de administración | RF01–RF07 (UI), Esc. 6–8 (UI) |
-| `auth-service` | 5001 | Registro (nombre y apellido reales, consentimiento), **código de 6 dígitos por correo**, login, JWT + refresh rotatorio | RF01, Esc. 7 y 8 |
+| `web` | 8000 | Pantallas (Jinja2 + Tailwind), pasarela de la API (`/api/v1`), sesión por cookies `HttpOnly`, renovación de tokens, panel de administración, opiniones, políticas de privacidad y de cookies | RF01–RF07 (UI), Esc. 6–8 (UI) |
+| `auth-service` | 5001 | Registro (nombre y apellido reales, consentimiento), **código de 6 dígitos enviado por correo al usuario**, política de contraseñas, login, JWT + refresh rotatorio | RF01, Esc. 7 y 8 |
 | `weather-service` | 5002 | Clima actual, historial, refresco, serie horaria observada y endpoint interno `/internal/observations` | RF02, RF03, RF06–RF08, RN04, RN08 |
 | `forecast-service` | 5003 | Pronósticos (solo inserción), calendario, evaluación y puntuación parametrizable de precisión | RF04, RF05, RF09–RF11 |
-| `catalog-service` | 5004 | Lugares (cascadas/rutas), fotos (validadas y re-codificadas a WebP sin metadatos) y auditoría de cambios | Esc. 6 |
-| `libs/honolulo_common` | — | Errores RFC 7807 (`application/problem+json`), validación JWT, cliente Open-Meteo y utilidades comunes | — |
+| `catalog-service` | 5004 | Lugares (cascadas/rutas), fotos (validadas y re-codificadas a WebP sin metadatos), **opiniones y puntuación**, moderación (fijar/eliminar) y auditoría de cambios | Esc. 6 y opiniones |
+| `libs/honolulo_common` | — | Errores RFC 7807 (`application/problem+json`), validación JWT, interfaz de proveedores meteorológicos (Open-Meteo incluido) y utilidades comunes | — |
 
 ### Principios y patrones arquitectónicos
 
 1. **Patrón API Gateway y Perímetro Seguro (`web`)**:
-   - Es el único punto de entrada público expuesto (`:8000`). Los microservicios de backend no exponen puertos al host.
+   - Es el único punto de entrada público expuesto (`:8000`). **En Docker Compose** los microservicios de backend no publican puertos al host; en desarrollo local (`scripts/dev.py`) escuchan solo en `127.0.0.1`.
    - El cliente se comunica exclusivamente mediante cookies de sesión `HttpOnly` y protección contra CSRF con token dedicado.
    - Aplica el principio de menor privilegio: `web` **no conoce** la clave secreta `JWT_SECRET_KEY`. Su rol es intermediar peticiones, inyectar el token Bearer recibido de `auth-service` hacia los microservicios protegidos y orquestar la rotación transparente de credenciales.
 
 2. **Aislamiento de Persistencia (Database-per-Service)**:
-   - Cada microservicio posee su propia base de datos física (`auth_db`, `weather_db`, `forecast_db`, `catalog_db`) con usuarios dedicados (`auth_svc`, `weather_svc`, etc.) y esquemas independientes.
-   - No existen claves foráneas ni dependencias directas a nivel de base de datos entre servicios distintos.
+   - Cada microservicio posee su propia base de datos física (`auth_db`, `weather_db`, `forecast_db`, `catalog_db`) con usuarios dedicados en Docker (`auth_svc`, `weather_svc`, etc.) y esquemas independientes (el PostgreSQL embebido de desarrollo usa un único usuario local).
+   - No existen claves foráneas ni dependencias directas a nivel de base de datos entre servicios distintos: por ejemplo, las opiniones de `catalog-service` guardan el identificador de la cuenta como texto, sin clave foránea hacia `auth_db`.
 
 3. **Comunicación Inter-Servicio y Seguridad**:
    - Peticiones autenticadas hacia servicios de dominio emplean tokens JWT firmados con algoritmo HS256.
-   - La sincronización entre `forecast-service` y `weather-service` (para obtener observaciones reales contra las cuales evaluar la precisión) se realiza vía HTTP interno mediante el endpoint `/internal/observations`, autenticado por una clave precompartida (`INTERNAL_API_TOKEN`).
+   - La sincronización entre `forecast-service` y `weather-service` (para obtener observaciones reales contra las cuales evaluar la precisión) se realiza vía HTTP interno mediante el endpoint `/internal/observations`, autenticado por una clave precompartida (`INTERNAL_API_TOKEN`). Ninguna clave está escrita en el código: cada servicio las lee del entorno y **no arranca sin secretos fuertes**.
 
 4. **Gestión de Medios y Multimedia**:
    - La carga, validación binaria profunda (inspección de cabeceras mágicas, rechazo de formatos no válidos o metadatos EXIF/GPS) y re-codificación a formato WebP son gestionadas por `catalog-service`.
    - Los archivos se almacenan en un volumen Docker persistente (`media`), y son servidos eficientemente hacia los clientes a través del endpoint de proxy `/media/{clave}` en `web` con cabeceras de caché inmutable y soporte de ETag.
+
+5. **Extensibilidad (SOLID, en especial abierto/cerrado)**:
+   - Las variantes se añaden **escribiendo código nuevo, sin editar el que ya funciona**: formas de enviar correo, reglas de contraseña y de comentarios, comandos de desarrollo y proveedores del clima se registran con un decorador y se eligen por configuración.
+   - Los puntos de extensión están en la sección [Cómo extender el sistema](#cómo-extender-el-sistema-solid-en-especial-abiertocerrado).
 
 ## Cómo ejecutarlo
 
@@ -118,22 +123,33 @@ pip install -r requirements-dev.txt
 python scripts/dev.py up               # PostgreSQL embebido + migraciones + 5 servicios
 ```
 
-Abre <http://127.0.0.1:8000> y crea una cuenta en `/registro`. **En desarrollo el correo no se envía: el mensaje con el
-código queda en la carpeta `.mail/`** (un archivo por correo). Sin Internet no hay datos de clima: el sistema no inventa
-datos (RN03) y mostrará el aviso de servicio no disponible.
+Abre <http://127.0.0.1:8000> y crea una cuenta en `/registro`. Sin Internet no hay datos de clima: el sistema no
+inventa datos (RN03) y mostrará el aviso de servicio no disponible.
 
 > `dev.py` se niega a arrancar si un puerto está ocupado (evita servidores antiguos sirviendo código desactualizado)
-> y al cerrar termina todo el árbol de procesos.
+> y al cerrar termina todo el árbol de procesos. **Los secretos no están en el código:** la primera vez genera claves
+> aleatorias en `.env.local` (ignorado por git).
 
-**Cuenta de administrador** (puede editar descripciones y fotos de los lugares en `/admin/lugares`):
+**Correo con el código de confirmación (envío real).** Mientras no configures un correo, `dev.py up` trabaja en *modo
+archivo*: el mensaje queda en `.mail/` y **no se envía** (lo dice al arrancar). Para que el código llegue al correo con el
+que se registra cada persona:
 
 ```bash
-cd services/auth
-python -m flask --app app:create_app create-admin            # crea una nueva
-python -m flask --app app:create_app set-role <correo> admin # o promueve una existente
+python scripts/dev.py setup-mail                 # pide tu Gmail y su contraseña de aplicación (la escribes tú; no se muestra)
+python scripts/dev.py test-mail tu_correo@gmail.com   # comprueba el envío antes de usarlo
+python scripts/dev.py up                         # ahora los códigos salen por correo
 ```
 
-(con `DATABASE_URL` apuntando a `auth_db`: la URI base del PostgreSQL embebido la imprime `dev.py` al arrancar).
+La contraseña de aplicación se crea en <https://myaccount.google.com/apppasswords> (requiere verificación en dos pasos) y
+se guarda solo en `.env.local`. La automatización de QA necesita leer los códigos de `.mail/`, así que se ejecuta con
+`python scripts/dev.py up --mail file`.
+
+**Administrador** (modera opiniones y edita descripciones y fotos de los lugares en `/admin/lugares`):
+
+```bash
+python scripts/dev.py create-admin               # crea uno nuevo (pide nombre, apellido y contraseña sin mostrarla)
+python scripts/dev.py set-role <correo> admin    # o promueve una cuenta existente (con `user` la degrada)
+```
 
 ### Con Docker Compose
 
@@ -152,8 +168,9 @@ docker compose up --build              # http://localhost:8000
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # 412 pruebas: común 25 · auth 87 · weather 27 · forecast 85 · catalog 92 · web 96
-cd qa && python -m pytest -q           # 118 pruebas de QA de extremo a extremo (requieren el sistema corriendo)
+python scripts/run_tests.py            # revisión de secretos + 634 pruebas: común 79 · auth 118 · weather 30 · forecast 88 · catalog 179 · web 140
+python scripts/dev.py up --mail file   # (otra terminal) el sistema para la QA de extremo a extremo
+cd qa && python -m pytest -q           # 165 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
 
 Las suites usan **PostgreSQL real** (no SQLite): `TEST_DATABASE_URL` si existe, o uno embebido con `pgserver`. Las
@@ -174,6 +191,29 @@ unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[in
 - **Esc. 8 — datos reales:** nombre y apellido obligatorios y validados (se rechazan «Test», «aaaa», dígitos, etc.).
   No se puede verificar que un nombre sea real; la titularidad del correo sí se comprueba con el código.
 
+## Opiniones, moderación, políticas y seguridad
+
+- **Opiniones y puntuación.** En cada cascada, el botón «Opiniones y puntuación» abre una ventana con el promedio,
+  la distribución por estrellas, el formulario (1–5 estrellas + comentario opcional de hasta 1000 caracteres) y la lista.
+  **Una opinión por persona y lugar** (se edita o se elimina, no se acumula); pública solo con «Nombre I.» (nunca el
+  correo ni el apellido completo). No se permiten enlaces; se limpian caracteres de control y de dirección invisibles; el
+  texto siempre se muestra escapado. *Se aplica a todas las cascadas del catálogo; «Marulla» no existe en él: el
+  administrador puede crearla desde `/admin/lugares/nuevo`.*
+- **Rol de administrador** (ya existía; ahora también modera): **fija** hasta 3 opiniones por lugar (aparecen primero) o
+  las **elimina**, desde la propia ventana pública o desde `/admin/lugares/<lugar>` (sección «Opiniones»). Cada acción
+  queda en el historial con quién la hizo, **sin conservar el texto eliminado**. Si el autor edita el texto de una
+  opinión fijada, deja de estar fijada. Además sigue cambiando fotos y descripciones.
+- **Políticas.** `/politica-de-privacidad` (reescrita: opiniones, correo, seguridad, moderación, retención y derechos
+  ARCO) y `/politica-de-cookies` (tabla de las 4 cookies reales, todas esenciales; sin analítica ni publicidad), más un
+  aviso informativo y descartable. La versión vigente es **2026-10-03** y se guarda con cada consentimiento. Siguen
+  siendo textos base: **requieren revisión legal**; y `CONTACT_EMAIL` debe cambiarse por un correo real.
+- **Seguridad.** Ninguna contraseña ni clave en el código (`scripts/check_secrets.py` lo vigila y corre con las pruebas);
+  los servicios **no arrancan sin secretos fuertes**; la contraseña del usuario solo existe como hash con sal (nunca en
+  código, registros ni correos); mínimo 10 caracteres, sin contraseñas comunes ni que contengan el nombre o el correo;
+  el administrador se crea con una contraseña oculta que cumple la misma política; cabeceras `Content-Security-Policy`
+  (marcos, `<base>`, formularios), `Permissions-Policy`, `COOP` y HSTS en HTTPS; `COOKIE_SECURE` activo por defecto en
+  producción.
+
 ## API
 
 La web expone el contrato del spec en `/api/v1/…`; todo el módulo meteorológico exige sesión (RF01 → `401`).
@@ -184,7 +224,10 @@ La web expone el contrato del spec en `/api/v1/…`; todo el módulo meteorológ
 | `GET /api/v1/weather/forecast?date=` · `…/calendar?month=` | forecast | RF04, RF05, RF09 |
 | `GET /api/v1/weather/evaluation/{forecast_id}` · `…/evaluation?date=` | forecast | RF10, RF11, RN06, RN07 |
 | `GET·PUT /api/v1/weather/scoring-parameters` | forecast | RF11 (PUT solo `admin`) |
-| `GET /api/v1/places[/{slug}]` · `GET /media/{clave}` | catalog (público) | Esc. 6 |
+| `GET /api/v1/places[/{slug}]` · `GET /media/{clave}` | catalog (público; incluye `rating`) | Esc. 6 |
+| `GET /api/v1/places/{slug}/reviews?limit=&offset=` | catalog (público, sin caché) | Opiniones |
+| `GET·PUT·DELETE /api/v1/places/{slug}/reviews/mine` | catalog (sesión) | Mi opinión |
+| `PUT /api/v1/reviews/{id}/pin` · `DELETE /api/v1/reviews/{id}` | catalog (solo `admin`) | Moderación |
 | `POST /auth/register · verify-email · resend-code · login · refresh · logout`, `GET /auth/me` | auth (directo) | Esc. 7 y 8 |
 
 Los contratos de `current`, `forecast` y `evaluation` conservan los campos del spec y solo añaden campos.
@@ -205,6 +248,27 @@ Errores en `application/problem+json`.
   · ≥ 75 «Buena» · ≥ 60 «Aceptable» · menor «Baja».
 - Tras editar un lugar, los visitantes pueden ver el texto anterior hasta 30 s (caché pública corta).
 
+## Cómo extender el sistema (SOLID, en especial abierto/cerrado)
+
+El código se organiza para **añadir variantes escribiendo código nuevo, no editando el que ya funciona**. Los puntos de
+extensión (cada uno tiene pruebas que lo demuestran, `test_extensibility.py` y similares):
+
+| Quiero añadir… | Cómo | Dónde |
+|---|---|---|
+| Otra forma de enviar correo (API de un proveedor, una cola…) | función con `@register_backend("nombre", external=...)` y `MAIL_BACKEND=nombre` | `services/auth/app/mailer.py` |
+| Otra forma de conectar por SMTP | función con `@register_smtp_security("nombre")` | `services/auth/app/mailer.py` |
+| Otro texto de correo | nueva función constructora | `services/auth/app/mail_templates.py` |
+| Una regla de contraseña (p. ej. lista de claves filtradas) | función con `@password_rule` | `services/auth/app/passwords.py` |
+| Una norma para los comentarios (p. ej. filtro de insultos) o un saneador | función con `@comment_rule` / `@comment_sanitizer` | `services/catalog/app/review_schemas.py` |
+| Un comando de desarrollo | función con `@command("nombre", ...)` | `scripts/dev.py` |
+| Una acción en la ventana de opiniones | entrada en la tabla `ACTIONS` + botón con `data-action` | `services/web/app/static/js/reviews.js` |
+| Un patrón de secreto a vigilar | entrada en `RULES` | `scripts/check_secrets.py` |
+| Otro proveedor del clima | clase que cumpla `WeatherProvider` + `@register_provider("nombre")`, y `WEATHER_PROVIDER=nombre` (con `WEATHER_PROVIDER_MODULES=mi.modulo` si no está incluido); `weather` y `forecast` no cambian | `libs/honolulo_common/honolulo_common/weather_provider.py` (interfaz y registro), `openmeteo.py` (ejemplo) |
+
+Responsabilidad única: cada módulo tiene un motivo para cambiar (p. ej. en el catálogo, `service.py` = lugares y fotos,
+`reviews.py` = opiniones sin depender de HTTP, `reviews_api.py` = rutas, `review_schemas.py` = validación del texto;
+en la web, `reviews_api.py` y `admin_reviews.py` separados de la pasarela del clima y de la edición de lugares).
+
 ## Limitaciones conocidas y decisiones
 
 - **«Observación real» = análisis horario del proveedor**, no una estación en el sitio.
@@ -217,6 +281,12 @@ Errores en `application/problem+json`.
 - **Tailwind por CDN** y fuentes de Google, como en el diseño; para producción conviene compilar y autoalojar.
 - **Política de privacidad**: texto base que requiere revisión legal.
 - Sin limitación de intentos por IP en el login (sí bloqueo de cuenta tras 5 fallos): usar un *rate limiter* en el proxy.
+- **El envío real de correo se probó contra un servidor SMTP local de pruebas**, no contra Gmail (sin credenciales en el
+  entorno de desarrollo): ejecuta `dev.py test-mail` con tu cuenta antes de depender de él. El envío es síncrono.
+- Las personas que ya tenían cuenta aceptaron una versión anterior de la política; el sistema aún no les pide
+  aceptar la nueva (la versión queda registrada por cuenta, por si se quiere exigir).
+- Los comentarios se moderan **después** de publicarse (no hay cola previa) y no hay filtro de insultos: solo bloqueo
+  de enlaces y la moderación del administrador. La cancelación de cuentas se atiende por correo (no hay botón).
 - Fuera de alcance: reservas y contacto por WhatsApp del diseño, pagos, «Iniciar sesión con Google».
 
 ## Estructura
@@ -226,5 +296,8 @@ libs/honolulo_common/        errores, JWT, openmeteo, conditions, timeutil, test
 services/{auth,weather,forecast,catalog,web}/   app/ · migrations/ · tests/ · Dockerfile
 qa/                          pruebas de QA de extremo a extremo + QA-REPORT.md
 infra/postgres/init/         crea una base y un rol por servicio (Docker)
-scripts/dev.py               entorno local sin Docker · scripts/run_tests.py
+scripts/dev.py               entorno local sin Docker (+ setup-mail, test-mail, create-admin, set-role)
+scripts/devenv.py            lee y genera .env.local (secretos aleatorios; fuera de git)
+scripts/check_secrets.py     falla si hay contraseñas o claves escritas en el código
+scripts/run_tests.py         revisión de secretos + todas las suites
 ```
