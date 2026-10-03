@@ -119,8 +119,8 @@ def downstream(state: SessionState, service: str, method: str, path: str, *, par
     return resp
 
 
-def anonymous(service: str, method: str, path: str, *, json=None, headers=None):
+def anonymous(service: str, method: str, path: str, *, json=None, headers=None, params=None):
     """Llamadas sin sesión (login, registro, lectura pública del catálogo y fotos)."""
     cfg = current_app.config
     merged = {"X-Request-ID": getattr(g, "request_id", ""), **(headers or {})}
-    return _request(cfg, service, method, path, json=json, headers=merged)
+    return _request(cfg, service, method, path, params=params, json=json, headers=merged)

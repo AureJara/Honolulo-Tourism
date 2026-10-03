@@ -2,12 +2,12 @@
 
 import base64
 import json
-import re
 from concurrent.futures import ThreadPoolExecutor
 
 import requests
 
 from conftest import BASE, Web
+from honolulo_common.testing import search_or_fail
 
 
 def drop_cookie(web: Web, name: str) -> None:
@@ -59,7 +59,7 @@ def test_session_cookies_lifetimes(member):
     w = Web()
     resp = w.login(member["email"])
     cookies = {c.split("=", 1)[0]: c for c in resp.raw.headers.getlist("Set-Cookie")}
-    age = lambda name: int(re.search(r"Max-Age=(\d+)", cookies[name]).group(1))
+    age = lambda name: int(search_or_fail(r"Max-Age=(\d+)", cookies[name]).group(1))
     access_age, refresh_age = age("hn_access"), age("hn_refresh")
     assert "HttpOnly" in cookies["hn_access"] and "HttpOnly" in cookies["hn_refresh"]
     assert access_age == 15 * 60 and refresh_age == 7 * 24 * 3600

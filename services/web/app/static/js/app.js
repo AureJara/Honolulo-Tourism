@@ -374,6 +374,17 @@
   }
 
   // ---------------------------------------------------------------- lugares
+  const starsHTML = (value, size = 'text-[18px]') => Array.from({ length: 5 }, (_, i) =>
+    icon('star', `${size} ${i < Math.round(value || 0) ? 'filled text-amber-500' : 'text-outline-variant'}`)).join('');
+  const plural = (n) => `${n} ${n === 1 ? 'opinión' : 'opiniones'}`;
+  function ratingLineHTML(r) {
+    if (!r || !r.count) return '<span class="text-sm text-on-surface-variant">Aún sin opiniones: sé la primera persona en opinar.</span>';
+    return `<span class="inline-flex" aria-hidden="true">${starsHTML(r.average)}</span>
+      <span class="text-sm font-semibold text-on-surface" aria-hidden="true">${Number(r.average).toFixed(1)}</span>
+      <span class="text-sm text-on-surface-variant" aria-hidden="true">· ${plural(r.count)}</span>
+      <span class="sr-only">Puntuación ${Number(r.average).toFixed(1)} de 5 según ${plural(r.count)}</span>`;
+  }
+
   function placeCardHTML(p) {
     const cover = p.cover
       ? `<img src="${esc(p.cover.thumb_url)}" srcset="${esc(p.cover.thumb_url)} ${Number(p.cover.thumb_width) || 640}w, ${esc(p.cover.url)} ${Number(p.cover.width) || 1600}w" sizes="(min-width: 768px) 50vw, 100vw" alt="${esc(p.cover.alt)}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">`
@@ -385,11 +396,15 @@
       <div class="h-64 w-full overflow-hidden bg-surface-container">${cover}</div>
       <div class="p-6 flex flex-col gap-4 flex-1">
         <h3 class="font-headline text-2xl font-bold text-primary">${esc(p.name)}</h3>
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-1 -mt-2" data-rating-for="${esc(p.slug)}">${ratingLineHTML(p.rating)}</div>
         <p class="text-on-surface-variant whitespace-pre-line">${esc(p.description)}</p>
         ${extras ? `<div class="flex gap-2 flex-wrap">${extras}</div>` : ''}
         <dl class="grid grid-cols-3 gap-3 py-3 border-y border-outline-variant/30 mt-auto">
           ${spec('Dificultad', p.difficulty && p.difficulty.label)}${spec('Caminata', p.hike && p.hike.label)}${spec(p.depth ? p.depth.label : 'Profundidad', p.depth && p.depth.display)}
         </dl>
+        <button type="button" data-open-reviews="${esc(p.slug)}" data-place-name="${esc(p.name)}" class="self-start inline-flex items-center gap-2 px-4 py-2 rounded-full border border-primary/40 text-primary hover:bg-primary hover:text-on-primary font-headline font-semibold text-sm transition-colors">
+          ${icon('rate_review', 'text-[18px]')}Opiniones y puntuación
+        </button>
       </div></article>`;
   }
 
@@ -430,6 +445,9 @@
     setInterval(tickFreshness, 30000);
     setInterval(loadCurrent, 5 * 60 * 1000);       // el servidor refresca al proveedor si el dato venció
   }
+
+  // Utilidades compartidas con reviews.js (opiniones y puntuación).
+  window.HN = { api, esc, icon, toast, starsHTML, ratingLineHTML, plural };
 
   init();
 })();

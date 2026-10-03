@@ -14,6 +14,7 @@ import io
 import os
 import pathlib
 import re
+import secrets
 import time
 import uuid
 
@@ -26,7 +27,9 @@ AUTH_URL = os.getenv("QA_AUTH_URL", "http://127.0.0.1:5001")
 CATALOG_URL = os.getenv("QA_CATALOG_URL", "http://127.0.0.1:5004")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 MAIL_DIR = pathlib.Path(os.getenv("QA_MAIL_DIR", ROOT / ".mail"))
-PASSWORD = "Qa" + uuid.uuid4().hex[:6] + "x9"          # contraseña aleatoria solo para esta ejecución
+# Contraseña aleatoria solo para esta ejecución. No usa el esquema de los correos de prueba («qa.<hex>»): la política
+# rechaza claves que contengan fragmentos del correo y, si coincidieran, la prueba fallaría al azar.
+PASSWORD = "Zr-" + secrets.token_urlsafe(9) + "-8"
 
 
 def pytest_collection_modifyitems(config, items):
@@ -139,12 +142,37 @@ def member_web(member):
     return w
 
 
+def auth_db():
+    """Conexión directa a la base del servicio de cuentas (PostgreSQL embebido de desarrollo)."""
+    import psycopg
+    import pgserver
+    uri = pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None).get_uri(database="auth_db")
+    return psycopg.connect(uri, autocommit=True)
+
+
 @pytest.fixture(scope="session")
 def admin_creds():
+    """Cuenta administradora: la de QA_ADMIN_EMAIL/QA_ADMIN_PASSWORD o, si no se definen, una temporal creada solo
+    para esta ejecución (registro + código del correo + promoción en la base) que se desactiva al terminar."""
     email, password = os.getenv("QA_ADMIN_EMAIL"), os.getenv("QA_ADMIN_PASSWORD")
-    if not (email and password):
-        pytest.skip("Defina QA_ADMIN_EMAIL y QA_ADMIN_PASSWORD para las pruebas de administración")
-    return email, password
+    if email and password:
+        yield email, password
+        return
+    email = unique_email("qa-admin")
+    try:
+        web = Web()
+        assert web.register(email).status_code == 302 and web.verify(email).status_code == 302
+        with auth_db() as conn:
+            conn.execute("UPDATE users SET role = 'admin' WHERE email_canonical = %s", (email,))
+    except Exception as exc:                                    # noqa: BLE001
+        pytest.skip(f"No se pudo crear un administrador temporal ({exc.__class__.__name__}). "
+                    "Defina QA_ADMIN_EMAIL y QA_ADMIN_PASSWORD, o inicie el sistema con --mail file")
+    yield email, PASSWORD
+    try:
+        with auth_db() as conn:                                 # la cuenta temporal no debe quedar con permisos
+            conn.execute("UPDATE users SET role = 'user', is_active = false WHERE email_canonical = %s", (email,))
+    except Exception:                                           # noqa: BLE001
+        pass
 
 
 @pytest.fixture()

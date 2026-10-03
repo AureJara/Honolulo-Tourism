@@ -10,8 +10,10 @@ from flask import Blueprint, Response, g, jsonify, request
 
 from honolulo_common.errors import ApiError
 
+from .relay import json_or_none, relay
 from .security import require_xhr_header
 from .upstream import UpstreamUnavailable, anonymous, downstream
+from .validators import slug_or_404
 
 bp = Blueprint("bff", __name__)
 
@@ -31,24 +33,6 @@ _POST_ONLY = {"forecast/refresh"}
 
 def _unavailable() -> ApiError:
     return ApiError(503, "SERVICE_UNAVAILABLE", UNAVAILABLE_MESSAGE)
-
-
-def _relay(resp) -> Response:
-    out = Response(resp.content, status=resp.status_code,
-                   content_type=resp.headers.get("Content-Type", "application/json"))
-    out.headers["Cache-Control"] = "no-store"
-    if "Retry-After" in resp.headers:
-        out.headers["Retry-After"] = resp.headers["Retry-After"]
-    if resp.status_code == 401:
-        g.state.cleared = True            # la sesión ya no sirve: se limpian las cookies del navegador
-    return out
-
-
-def _json(resp):
-    try:
-        return resp.json()
-    except ValueError:
-        return None
 
 
 @bp.route("/api/v1/weather/<path:rest>", methods=["GET", "POST", "PUT"])
@@ -73,7 +57,7 @@ def weather_api(rest: str):
                           params=request.args.to_dict(flat=True), json=body)
     except UpstreamUnavailable:
         raise _unavailable() from None
-    return _relay(resp)
+    return relay(resp)
 
 
 @bp.get("/api/v1/auth/me")
@@ -81,7 +65,7 @@ def me():
     if not g.state.access and not g.state.refresh:
         raise ApiError(401, "AUTH_REQUIRED", "Se requiere una sesión activa.")
     try:
-        return _relay(downstream(g.state, "auth", "GET", "/api/v1/auth/me"))
+        return relay(downstream(g.state, "auth", "GET", "/api/v1/auth/me"))
     except UpstreamUnavailable:
         raise ApiError(503, "SERVICE_UNAVAILABLE", "El servicio de autenticación no está disponible.") from None
 
@@ -106,8 +90,8 @@ def _combined_refresh():
         state.cleared = True
         raise ApiError(401, "AUTH_REQUIRED", "Se requiere una sesión activa.")
 
-    cur_body = _json(current) if current is not None else None
-    fc_body = _json(forecast) if forecast is not None else None
+    cur_body = json_or_none(current) if current is not None else None
+    fc_body = json_or_none(forecast) if forecast is not None else None
     cur_ok, fc_ok = statuses[0] == 200, statuses[1] == 200
     # Si el proveedor falló, el servicio devuelve el último dato guardado marcado como anterior.
     shown = cur_body if cur_ok else (cur_body or {}).get("last_known")
@@ -141,9 +125,7 @@ def places_list():
 
 @bp.get("/api/v1/places/<slug>")
 def places_detail(slug: str):
-    if not re.fullmatch(r"[a-z0-9-]{1,80}", slug):
-        raise ApiError(404, "NOT_FOUND", "Lugar no encontrado.")
-    return _public_catalog(f"/api/v1/places/{slug}")
+    return _public_catalog(f"/api/v1/places/{slug_or_404(slug)}")
 
 
 def _public_catalog(path: str) -> Response:

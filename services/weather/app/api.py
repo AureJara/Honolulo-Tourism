@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import timedelta
 
-from flask import Blueprint, current_app, jsonify, request
+from flask import Blueprint, jsonify, request
 
 from honolulo_common.errors import ApiError
 from honolulo_common.security import auth_required, internal_required
@@ -84,7 +84,7 @@ def get_status():
         .order_by(ProviderFetchLog.fetched_at.desc()).limit(1)).scalar_one_or_none()
     latest = service.latest_current()
     return _no_store(jsonify({
-        "location": loc.name, "provider": "open-meteo",
+        "location": loc.name, "provider": service.provider().name,
         "last_attempt_at": iso_local(last.fetched_at, loc.timezone) if last else None,
         "last_attempt_ok": last.ok if last else None,
         "last_update_at": iso_local(latest.fetched_at, loc.timezone) if latest else None,

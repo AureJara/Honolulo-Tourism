@@ -30,7 +30,7 @@
         {{ field("first_name", "Nombre", autocomplete="given-name", half=True) }}
         {{ field("last_name", "Apellido", autocomplete="family-name", half=True) }}
         {{ field("email", "Correo electrónico", type="email", autocomplete="email", hint="Recibirás un código de 6 dígitos en este correo.") }}
-        {{ field("password", "Contraseña", type="password", autocomplete="new-password", hint="Mínimo 8 caracteres, con letras y números.") }}
+        {{ field("password", "Contraseña", type="password", autocomplete="new-password", hint="Mínimo 10 caracteres, con letras y números. Sin tu nombre ni tu correo, y nada demasiado común.") }}
         {{ field("password_confirm", "Repite la contraseña", type="password", autocomplete="new-password") }}
 
         <div class="sm:col-span-2 flex flex-col gap-1">

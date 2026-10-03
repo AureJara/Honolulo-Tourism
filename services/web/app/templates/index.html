@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Planifica tu visita — Clima y pronóstico de Honolulo{% endblock %}
 {% block content %}
-<main id="contenido" class="pt-24 pb-20">
+<main id="contenido" class="pt-24 pb-20" data-role="{{ user.role }}">
   <div class="max-w-7xl mx-auto px-6 md:px-10">
 
     <!-- Banner + clima actual (RF02, RF03, RF06, RF07) -->
@@ -120,8 +120,21 @@
     </section>
   </div>
 </main>
+<dialog id="reviews-dialog" aria-labelledby="reviews-title" class="w-[min(94vw,46rem)] max-h-[90vh] p-0 rounded-2xl bg-surface text-on-surface shadow-2xl backdrop:bg-black/45 backdrop:backdrop-blur-sm">
+  <div class="flex items-start justify-between gap-4 px-6 py-4 border-b border-outline-variant/30 sticky top-0 bg-surface z-10">
+    <div>
+      <p class="font-headline text-xs font-bold tracking-widest text-primary uppercase">Opiniones y puntuación</p>
+      <h2 id="reviews-title" class="font-headline text-2xl font-bold text-on-surface"></h2>
+    </div>
+    <button type="button" data-action="close" aria-label="Cerrar opiniones" class="shrink-0 w-9 h-9 rounded-full border border-outline-variant/40 hover:bg-surface-container-high flex items-center justify-center">
+      <span class="material-symbols-outlined text-[20px]" aria-hidden="true">close</span>
+    </button>
+  </div>
+  <div id="reviews-body" class="px-6 py-5 overflow-y-auto max-h-[calc(90vh-5rem)]" aria-live="polite"></div>
+</dialog>
 <div id="toast" role="status" aria-live="polite" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] pointer-events-none"></div>
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/reviews.js') }}" defer></script>
 {% endblock %}

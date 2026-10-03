@@ -4,6 +4,7 @@ from marshmallow import EXCLUDE, Schema, ValidationError, fields, validate, vali
 from honolulo_common.errors import ApiError, validation_error
 
 from .names import InvalidName, clean_person_name
+from .passwords import check_password
 
 
 class _Base(Schema):
@@ -11,12 +12,10 @@ class _Base(Schema):
         unknown = EXCLUDE
 
 
-def _password_rules(pwd: str) -> None:
-    min_len = current_app.config["PASSWORD_MIN_LENGTH"]
-    if len(pwd) < min_len or len(pwd) > 128:
-        raise ValidationError(f"Debe tener entre {min_len} y 128 caracteres.")
-    if pwd.isdigit() or pwd.isalpha():
-        raise ValidationError("Debe combinar letras y números.")
+def _password_rules(pwd: str, personal: tuple[str, ...] = ()) -> None:
+    problem = check_password(pwd, min_len=current_app.config["PASSWORD_MIN_LENGTH"], personal=personal)
+    if problem:
+        raise ValidationError(problem)
 
 
 class RegisterSchema(_Base):
@@ -44,6 +43,15 @@ class RegisterSchema(_Base):
     @validates("password")
     def _password(self, value, **kwargs):
         _password_rules(value)
+
+    @validates_schema
+    def _password_vs_person(self, data, **kwargs):
+        """La contraseña no puede contener el nombre, el apellido ni parte del correo de quien se registra."""
+        personal = (data.get("first_name", ""), data.get("last_name", ""), str(data.get("email", "")).split("@")[0])
+        try:
+            _password_rules(data["password"], personal)
+        except ValidationError as exc:
+            raise ValidationError(exc.messages, "password") from exc
 
     @validates("accept_privacy")
     def _consent(self, value, **kwargs):

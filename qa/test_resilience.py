@@ -10,7 +10,12 @@ import uuid
 import pytest
 import requests
 
-from conftest import AUTH_URL, PASSWORD, ROOT, Web, service_token
+from conftest import AUTH_URL, PASSWORD, ROOT, service_token
+
+sys.path.insert(0, str(ROOT / "scripts"))
+import devenv  # noqa: E402
+
+from honolulo_common.testing import search_or_fail  # noqa: E402
 
 SERVICES = ROOT / "services"
 DEAD = "http://127.0.0.1:9"                      # puerto cerrado: conexión rechazada
@@ -35,9 +40,8 @@ def _new_database(prefix: str) -> str:
 
 
 def _base_env(**extra) -> dict:
-    env = dict(os.environ, PYTHONUTF8="1", APP_ENV="development")
-    env.setdefault("JWT_SECRET_KEY", "dev-secret-change-me-dev-secret-change-me")
-    env.setdefault("INTERNAL_API_TOKEN", "dev-internal-token")
+    """Entorno de las instancias alternativas: los mismos secretos locales (.env.local) que el sistema en marcha."""
+    env = {**devenv.read_env_file(), **os.environ, "PYTHONUTF8": "1", "APP_ENV": "development"}
     env.update(extra)
     return env
 
@@ -146,7 +150,7 @@ def test_web_reports_unavailable_weather_service_and_still_renders_the_page(runn
     s = requests.Session()
     page = s.get(f"{base}/ingresar")
     import re
-    token = re.search(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
+    token = search_or_fail(r'name="csrf_token" value="([^"]+)"', page.text).group(1)
     login = s.post(f"{base}/ingresar", data={"email": member["email"], "password": PASSWORD, "csrf_token": token}, allow_redirects=False)
     assert login.status_code == 302
     assert s.get(f"{base}/").status_code == 200                          # la página principal carga igualmente
@@ -170,11 +174,11 @@ def test_web_shows_friendly_messages_when_auth_is_down(running):
     base = f"http://127.0.0.1:{alt.port}"
     s = requests.Session()
     import re
-    token = re.search(r'name="csrf_token" value="([^"]+)"', s.get(f"{base}/ingresar").text).group(1)
+    token = search_or_fail(r'name="csrf_token" value="([^"]+)"', s.get(f"{base}/ingresar").text).group(1)
     resp = s.post(f"{base}/ingresar", data={"email": "a@b.co", "password": "x", "csrf_token": token})
     assert resp.status_code == 503 and "servicio de autenticación no está disponible" in resp.text
-    reg = re.search(r'name="csrf_token" value="([^"]+)"', s.get(f"{base}/registro").text).group(1)
-    resp = s.post(f"{base}/registro", data={"first_name": "Ana", "last_name": "Ríos", "email": "a@b.co", "password": "clave1234",
-                                            "password_confirm": "clave1234", "accept_privacy": "on", "csrf_token": reg})
+    reg = search_or_fail(r'name="csrf_token" value="([^"]+)"', s.get(f"{base}/registro").text).group(1)
+    resp = s.post(f"{base}/registro", data={"first_name": "Ana", "last_name": "Ríos", "email": "a@b.co", "password": PASSWORD,
+                                            "password_confirm": PASSWORD, "accept_privacy": "on", "csrf_token": reg})
     assert resp.status_code == 503 and "no está disponible" in resp.text
     assert "Traceback" not in resp.text

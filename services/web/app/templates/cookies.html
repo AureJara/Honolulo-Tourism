@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Política de cookies — Honolulo{% endblock %}
+{% block content %}
+<main id="contenido" class="pt-32 pb-24">
+  <article class="max-w-3xl mx-auto px-6 text-on-surface">
+    <p class="font-headline text-xs font-bold tracking-widest text-primary uppercase">Versión {{ policy_version }}</p>
+    <h1 class="mt-1 font-headline text-4xl font-bold tracking-tight">Política de cookies</h1>
+    <p class="mt-3 p-3 rounded-lg bg-warn-container text-on-warn-container text-sm">
+      Documento base del proyecto. Debe ser revisado por asesoría legal antes de su publicación definitiva.
+    </p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">1. Qué son las cookies</h2>
+    <p class="mt-2 text-on-surface-variant">Son pequeños archivos que el sitio guarda en tu navegador. Sirven para que reconozca tu sesión y para proteger los formularios. Honolulo usa <strong>solo cookies esenciales</strong>: sin ellas no podrías iniciar sesión ni enviar formularios de forma segura.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">2. Cookies que usamos</h2>
+    <div class="mt-3 overflow-x-auto rounded-xl border border-outline-variant/30 bg-surface-container-lowest" role="region" aria-label="Tabla de cookies (se desplaza en pantallas pequeñas)" tabindex="0">
+      <table class="w-full text-sm min-w-[36rem]">
+        <caption class="sr-only">Cookies de Honolulo</caption>
+        <thead class="bg-surface-container-low text-left text-[11px] uppercase tracking-wider text-tertiary font-headline">
+          <tr><th scope="col" class="px-4 py-3">Nombre</th><th scope="col" class="px-4 py-3">Para qué sirve</th><th scope="col" class="px-4 py-3">Duración</th><th scope="col" class="px-4 py-3">Tipo</th></tr>
+        </thead>
+        <tbody>
+          {% for name, purpose, duration in cookies %}
+          <tr class="border-t border-outline-variant/20 align-top">
+            <th scope="row" class="px-4 py-3 font-mono text-xs font-semibold">{{ name }}</th>
+            <td class="px-4 py-3 text-on-surface-variant">{{ purpose }}</td>
+            <td class="px-4 py-3 text-on-surface-variant whitespace-nowrap">{{ duration }}</td>
+            <td class="px-4 py-3 text-on-surface-variant">Esencial · propia · no accesible desde JavaScript</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="mt-2 text-xs text-tertiary">Por ser estrictamente necesarias para prestar el servicio, no requieren tu consentimiento previo, pero te informamos de ellas.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">3. Cookies que NO usamos</h2>
+    <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
+      <li>Cookies de publicidad o de seguimiento entre sitios.</li>
+      <li>Cookies de analítica o de perfilado de visitantes.</li>
+    </ul>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">4. Almacenamiento local del navegador</h2>
+    <p class="mt-2 text-on-surface-variant">Guardamos en tu navegador un único dato, <span class="font-mono text-xs font-semibold">hn_aviso_cookies</span>, para recordar que ya viste el aviso de cookies y no volver a mostrarlo. No es una cookie ni contiene datos personales.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">5. Recursos de terceros</h2>
+    <p class="mt-2 text-on-surface-variant">La página carga tipografías (Google Fonts) y estilos (Tailwind CSS) desde servidores externos. Para entregarlos, esos servidores reciben tu dirección IP y datos básicos de tu navegador; nosotros no les enviamos datos de tu cuenta. Consulta sus propias políticas de privacidad para más detalles.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">6. Cómo controlarlas o borrarlas</h2>
+    <p class="mt-2 text-on-surface-variant">Puedes ver, bloquear o eliminar cookies desde la configuración de tu navegador. Al cerrar sesión borramos las de acceso. Si bloqueas las esenciales, no podrás iniciar sesión ni usar los formularios.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">7. Más información</h2>
+    <p class="mt-2 text-on-surface-variant">Para saber cómo tratamos tus datos personales consulta la <a class="text-primary underline underline-offset-2" href="{{ url_for('pages.privacy') }}">política de privacidad</a>. Dudas: <a class="text-primary underline underline-offset-2" href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+
+    <p class="mt-10"><a class="inline-flex items-center gap-1 text-primary font-semibold underline underline-offset-2" href="{{ url_for('pages.index') }}"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>Volver al inicio</a></p>
+  </article>
+</main>
+{% endblock %}

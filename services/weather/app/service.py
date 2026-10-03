@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from honolulo_common.conditions import condition_code_from_wmo, describe
 from honolulo_common.errors import ApiError
 from honolulo_common.location import Location
-from honolulo_common.openmeteo import PROVIDER_NAME, ProviderError, Reading
+from honolulo_common.weather_provider import ProviderError, Reading
 from honolulo_common.timeutil import as_utc, iso_local, local_date, local_hour_to_utc, utcnow
 
 from .extensions import db
@@ -40,7 +40,7 @@ def provider():
 def _log_fetch(kind: str, ok: bool, error: str | None = None) -> None:
     stats = getattr(provider(), "last_stats", None)
     db.session.add(ProviderFetchLog(
-        provider=PROVIDER_NAME, kind=kind, ok=ok,
+        provider=provider().name, kind=kind, ok=ok,
         http_status=getattr(stats, "http_status", None), latency_ms=getattr(stats, "latency_ms", None),
         error=(error or "")[:300] or None, fetched_at=utcnow()))
     db.session.commit()
@@ -62,7 +62,7 @@ def _row_from_reading(reading: Reading, *, source: str, fetched_at: datetime) ->
         "rain_probability_pct": reading.rain_probability_pct, "wind_kph": reading.wind_kph,
         "cloud_cover_pct": reading.cloud_cover_pct, "weather_code": reading.weather_code,
         "condition": condition_code_from_wmo(reading.weather_code), "is_day": reading.is_day,
-        "source": source, "provider": PROVIDER_NAME, "fetched_at": fetched_at,
+        "source": source, "provider": provider().name, "fetched_at": fetched_at,
     }
 
 

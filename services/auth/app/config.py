@@ -10,7 +10,7 @@ class Config:
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
 
     # HS256 con secreto compartido entre servicios (ver README: evolución a RS256/JWKS).
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me-dev-secret-change-me")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
     JWT_ISSUER = os.getenv("JWT_ISSUER", "honolulo-auth")
     JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "honolulo-api")
 
@@ -18,12 +18,12 @@ class Config:
     REFRESH_TOKEN_DAYS = int(os.getenv("REFRESH_TOKEN_DAYS", "7"))
     MAX_FAILED_ATTEMPTS = int(os.getenv("MAX_FAILED_ATTEMPTS", "5"))
     LOCKOUT_MINUTES = int(os.getenv("LOCKOUT_MINUTES", "15"))
-    PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "8"))
+    PASSWORD_MIN_LENGTH = int(os.getenv("PASSWORD_MIN_LENGTH", "10"))
     PASSWORD_HASH_METHOD = os.getenv("PASSWORD_HASH_METHOD", "scrypt")   # las pruebas usan uno más barato
     MAX_CONTENT_LENGTH = 16 * 1024
 
     # Política de privacidad vigente que el usuario debe aceptar al registrarse (Escenario 7).
-    PRIVACY_POLICY_VERSION = os.getenv("PRIVACY_POLICY_VERSION", "2026-10")
+    PRIVACY_POLICY_VERSION = os.getenv("PRIVACY_POLICY_VERSION", "2026-10-03")
 
     # Confirmación del correo con código de 6 dígitos (Escenario 7).
     VERIFICATION_CODE_TTL_MIN = int(os.getenv("VERIFICATION_CODE_TTL_MIN", "10"))

@@ -27,7 +27,7 @@ def test_privacy_policy_page_is_public_and_versioned(client):
     resp = client.get("/politica-de-privacidad")
     html = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    for expected in ("Política de privacidad", "Versión 2026-10", "Ley N.° 29733", "revisado por asesoría legal"):
+    for expected in ("Política de privacidad", "Versión 2026-10-03", "Ley N.° 29733", "revisado por asesoría legal"):
         assert expected in html
 
 

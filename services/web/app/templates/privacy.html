@@ -8,6 +8,7 @@
     <p class="mt-3 p-3 rounded-lg bg-warn-container text-on-warn-container text-sm">
       Documento base del proyecto. Debe ser revisado por asesoría legal antes de su publicación definitiva.
     </p>
+    <p class="mt-4 text-on-surface-variant">Esta política explica qué datos personales trata Honolulo, para qué, con quién se comparten y qué derechos tienes. Para saber cómo usamos las cookies lee la <a class="text-primary underline underline-offset-2" href="{{ url_for('pages.cookies') }}">política de cookies</a>.</p>
 
     <h2 class="mt-8 font-headline text-xl font-bold">1. Quién trata tus datos</h2>
     <p class="mt-2 text-on-surface-variant">Honolulo Eco-Tourism Sanctuary, Tingo María, Huánuco, Perú. Contacto para asuntos de privacidad: <a class="text-primary underline underline-offset-2" href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
@@ -15,31 +16,63 @@
     <h2 class="mt-8 font-headline text-xl font-bold">2. Qué datos recopilamos</h2>
     <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
       <li><strong>Datos de registro:</strong> nombre, apellido y correo electrónico, que debes proporcionar reales.</li>
-      <li><strong>Credenciales:</strong> tu contraseña se guarda cifrada con un algoritmo de hash; nunca la conocemos ni la enviamos.</li>
+      <li><strong>Tu contraseña:</strong> solo tú la conoces. Se guarda únicamente como un «hash» con sal (una huella irreversible): ni el equipo de Honolulo ni los administradores pueden verla ni recuperarla, y nunca aparece en el código, en los registros ni en los correos.</li>
       <li><strong>Consentimiento:</strong> la fecha y la versión de esta política que aceptaste.</li>
-      <li><strong>Datos técnicos de seguridad:</strong> fecha del último acceso e intentos fallidos de ingreso, para proteger tu cuenta.</li>
+      <li><strong>Opiniones y puntuaciones:</strong> la puntuación de 1 a 5 estrellas, el comentario opcional y la fecha. Se muestran <em>públicamente</em> con tu nombre y la inicial de tu apellido (por ejemplo «Ana R.»). No publicamos tu correo ni tu apellido completo.</li>
+      <li><strong>Datos técnicos de seguridad:</strong> fecha del último acceso, intentos fallidos de ingreso y el navegador asociado a cada sesión (para poder cerrarla si se detecta un uso indebido). Los registros técnicos del servidor pueden incluir la fecha, la ruta consultada y la dirección IP.</li>
     </ul>
 
     <h2 class="mt-8 font-headline text-xl font-bold">3. Para qué los usamos</h2>
     <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
-      <li>Crear y proteger tu cuenta y confirmar que el correo es tuyo mediante un código de 6 dígitos.</li>
+      <li>Crear y proteger tu cuenta y confirmar que el correo es tuyo mediante un código de 6 dígitos que te enviamos por correo.</li>
       <li>Permitirte consultar el clima y el pronóstico de Honolulo para planificar tu visita.</li>
+      <li>Publicar tus opiniones y puntuaciones sobre las cascadas y mostrar el promedio a otros visitantes.</li>
+      <li>Moderar las opiniones para mantener un espacio respetuoso y proteger el servicio contra abusos.</li>
     </ul>
-    <p class="mt-2 text-on-surface-variant">No vendemos tus datos ni los usamos para publicidad.</p>
+    <p class="mt-2 text-on-surface-variant">No vendemos tus datos, no los usamos para publicidad y no elaboramos perfiles sobre ti.</p>
 
     <h2 class="mt-8 font-headline text-xl font-bold">4. Con quién los compartimos</h2>
-    <p class="mt-2 text-on-surface-variant">Únicamente con el proveedor de correo que entrega el código de confirmación. Las consultas de clima se hacen con las coordenadas del lugar, sin tus datos personales.</p>
+    <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
+      <li><strong>Proveedor de correo</strong> (por ejemplo Gmail/Google, según la configuración del servicio): recibe tu correo y el código de confirmación solo para entregarte el mensaje.</li>
+      <li><strong>Proveedor meteorológico</strong> (Open-Meteo): las consultas llevan únicamente las coordenadas del lugar, nunca tus datos.</li>
+      <li><strong>Recursos de la página:</strong> las tipografías (Google Fonts) y los estilos (Tailwind CSS) se cargan desde servidores externos, que reciben la dirección IP y datos básicos de tu navegador. No les enviamos datos de tu cuenta.</li>
+      <li><strong>Administradores de Honolulo:</strong> pueden ver y moderar las opiniones; no tienen acceso a las contraseñas.</li>
+      <li><strong>Autoridades</strong>, únicamente cuando una ley o una orden válida lo exija.</li>
+    </ul>
 
-    <h2 class="mt-8 font-headline text-xl font-bold">5. Cuánto tiempo los conservamos</h2>
-    <p class="mt-2 text-on-surface-variant">Mientras tu cuenta esté activa. Si no confirmas tu correo, la cuenta pendiente puede eliminarse pasados unos días.</p>
+    <h2 class="mt-8 font-headline text-xl font-bold">5. Cómo protegemos tus datos</h2>
+    <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
+      <li>Contraseñas con hash y sal; se rechazan las contraseñas demasiado comunes o que contengan tu nombre o correo.</li>
+      <li>Código de confirmación con vencimiento de 10 minutos, un máximo de intentos y reenvíos limitados.</li>
+      <li>Bloqueo temporal de la cuenta tras varios intentos fallidos de ingreso.</li>
+      <li>Sesiones con cookies protegidas (no accesibles desde JavaScript) y conexión cifrada (HTTPS) en producción.</li>
+    </ul>
+    <p class="mt-2 text-on-surface-variant">Ningún sistema es infalible: usa una contraseña única. Honolulo <strong>nunca</strong> te pedirá tu contraseña ni el código de confirmación por teléfono, chat o correo.</p>
 
-    <h2 class="mt-8 font-headline text-xl font-bold">6. Tus derechos</h2>
-    <p class="mt-2 text-on-surface-variant">Puedes solicitar el acceso, la rectificación, la cancelación y la oposición al tratamiento de tus datos personales (derechos ARCO, Ley N.° 29733 de Protección de Datos Personales del Perú) escribiendo a {{ contact_email }}.</p>
+    <h2 class="mt-8 font-headline text-xl font-bold">6. Opiniones, puntuaciones y moderación</h2>
+    <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
+      <li>Tú eres responsable de lo que publicas. No se permiten enlaces, insultos, publicidad ni datos personales de terceras personas.</li>
+      <li>Los administradores pueden <strong>eliminar</strong> opiniones que incumplan estas normas y <strong>fijar</strong> (destacar al principio) las que consideren útiles. Cada acción de moderación queda registrada con quién la hizo, sin copiar el texto eliminado.</li>
+      <li>Si editas el texto de una opinión fijada, deja de estar fijada hasta que un administrador la revise de nuevo.</li>
+      <li>Puedes <strong>editar o eliminar tu opinión</strong> cuando quieras desde el lugar correspondiente; al eliminarla se borra del sistema.</li>
+    </ul>
 
-    <h2 class="mt-8 font-headline text-xl font-bold">7. Cambios en esta política</h2>
-    <p class="mt-2 text-on-surface-variant">Si cambia, publicaremos una nueva versión y te pediremos aceptarla otra vez cuando corresponda.</p>
+    <h2 class="mt-8 font-headline text-xl font-bold">7. Cuánto tiempo los conservamos</h2>
+    <p class="mt-2 text-on-surface-variant">Mientras tu cuenta esté activa. Las opiniones permanecen hasta que tú o un administrador las eliminen, o hasta que se cancele tu cuenta. Si no confirmas tu correo, la cuenta pendiente puede eliminarse pasados unos días. Los registros técnicos se conservan solo el tiempo necesario para la seguridad y el diagnóstico.</p>
 
-    <p class="mt-10"><a class="inline-flex items-center gap-1 text-primary font-semibold underline underline-offset-2" href="{{ url_for('pages.register') }}"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>Volver al registro</a></p>
+    <h2 class="mt-8 font-headline text-xl font-bold">8. Tus derechos</h2>
+    <p class="mt-2 text-on-surface-variant">Puedes solicitar el acceso, la rectificación, la cancelación y la oposición al tratamiento de tus datos personales (derechos ARCO, Ley N.° 29733 de Protección de Datos Personales del Perú) escribiendo a <a class="text-primary underline underline-offset-2" href="mailto:{{ contact_email }}">{{ contact_email }}</a>. Si consideras que no atendimos tu solicitud, puedes acudir a la Autoridad Nacional de Protección de Datos Personales.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">9. Menores de edad</h2>
+    <p class="mt-2 text-on-surface-variant">Las personas menores de 14 años no deben crear una cuenta sin la autorización de su madre, padre o tutor.</p>
+
+    <h2 class="mt-8 font-headline text-xl font-bold">10. Cambios en esta política</h2>
+    <p class="mt-2 text-on-surface-variant">Si cambia, publicaremos una nueva versión (la vigente es la {{ policy_version }}) y te pediremos aceptarla otra vez cuando corresponda.</p>
+
+    <p class="mt-10 flex flex-wrap gap-x-6 gap-y-2">
+      <a class="inline-flex items-center gap-1 text-primary font-semibold underline underline-offset-2" href="{{ url_for('pages.cookies') }}"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">cookie</span>Política de cookies</a>
+      <a class="inline-flex items-center gap-1 text-primary font-semibold underline underline-offset-2" href="{{ url_for('pages.register') }}"><span class="material-symbols-outlined text-[18px]" aria-hidden="true">arrow_back</span>Volver al registro</a>
+    </p>
   </article>
 </main>
 {% endblock %}

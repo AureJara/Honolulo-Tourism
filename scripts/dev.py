@@ -1,10 +1,16 @@
 #!/usr/bin/env python
-"""Entorno de desarrollo SIN Docker: PostgreSQL embebido (pgserver) + los 4 servicios.
+"""Entorno de desarrollo SIN Docker: PostgreSQL embebido (pgserver) + los 5 servicios.
 
     python scripts/dev.py up                       # base de datos, migraciones y servicios
+    python scripts/dev.py up --mail file           # fuerza el correo a archivos (.mail/); lo usa la QA automática
+    python scripts/dev.py setup-mail               # guarda tu Gmail + contraseña de aplicación (la escribes tú)
+    python scripts/dev.py test-mail tu@gmail.com   # envía un correo de prueba con esa configuración
+    python scripts/dev.py create-admin             # crea un administrador (pide la contraseña sin mostrarla)
+    python scripts/dev.py set-role <correo> admin  # promueve (o degrada) una cuenta existente
     python scripts/dev.py migrate                  # solo aplica migraciones
     python scripts/dev.py makemigrations "mensaje" --service catalog   # migración nueva (Alembic autogenerate)
 
+Los secretos se generan al azar en ``.env.local`` (fuera de git); no hay contraseñas ni claves en el código.
 Con Docker use ``docker compose up --build`` (ver README).
 """
 
@@ -17,7 +23,11 @@ import subprocess
 import sys
 import time
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
+
+import devenv  # noqa: E402  (mismo directorio: scripts/)
 
 ROOT = Path(__file__).resolve().parent.parent
 PORTS = {"auth": 5001, "weather": 5002, "forecast": 5003, "catalog": 5004, "web": 8000}
@@ -26,9 +36,36 @@ DATA_DIR = ROOT / ".pgdata"
 LOG_DIR = ROOT / ".logs"
 
 
+RECOVERY_WAIT_S = 180
+
+
+def wait_for_recovery(timeout: float = RECOVERY_WAIT_S) -> bool:
+    """Espera a que PostgreSQL termine de arrancar. Tras un cierre brusco (apagón, ventana cerrada) repasa su registro
+    de transacciones y puede tardar bastante más que los 10 s que concede ``pgserver``; el proceso sigue en segundo plano."""
+    from pgserver.utils import PostmasterInfo
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        info = PostmasterInfo.read_from_pgdata(DATA_DIR)
+        if info is not None and info.is_running() and info.status == "ready":
+            return True
+        time.sleep(1)
+    return False
+
+
 def start_postgres():
+    import logging
+
     import pgserver
-    server = pgserver.get_server(DATA_DIR, cleanup_mode="stop")
+    from pgserver.postgres_server import PostgresServer
+    logging.getLogger("pgserver").setLevel(logging.CRITICAL)      # si tarda, pgserver vuelca todo el registro: se explica abajo
+    try:
+        server = pgserver.get_server(DATA_DIR, cleanup_mode="stop")
+    except subprocess.TimeoutExpired:
+        print("PostgreSQL se está recuperando de un cierre inesperado; esperando a que termine…", flush=True)
+        if not wait_for_recovery():
+            raise SystemExit("PostgreSQL no terminó de recuperarse. Espera un minuto y vuelve a ejecutar el comando.") from None
+        PostgresServer._instances.pop(DATA_DIR.resolve(), None)     # el intento fallido dejó una instancia a medias
+        server = pgserver.get_server(DATA_DIR, cleanup_mode="stop")  # ahora se engancha al servidor ya listo
     return server, server.get_uri()                      # postgresql://postgres:@127.0.0.1:PORT/postgres
 
 
@@ -42,19 +79,38 @@ def ensure_databases(uri: str) -> None:
                 conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
 
 
-def base_env(pg_uri: str) -> dict:
+def local_env(mail_mode: str = "auto") -> dict:
+    """Entorno de los servicios: ``.env.local`` (secretos y SMTP) y, por encima, las variables reales del sistema."""
+    values, created = devenv.ensure_dev_secrets()
+    if created:
+        print("Secretos de desarrollo generados al azar en .env.local (no se sube a git).")
+    env = {**values, **os.environ}
+    if mail_mode == "file":
+        env["MAIL_BACKEND"] = "file"
+    elif "MAIL_BACKEND" not in env:
+        env["MAIL_BACKEND"] = "smtp" if devenv.smtp_configured(env) else "file"
+    if env["MAIL_BACKEND"] == "smtp" and not env.get("MAIL_FROM") and env.get("SMTP_USER"):
+        env["MAIL_FROM"] = f"Honolulo <{env['SMTP_USER']}>"       # Gmail solo envía como la cuenta autenticada
+    return env
+
+
+def mail_banner(env: dict) -> str:
+    if env["MAIL_BACKEND"] == "smtp":
+        return (f"Correo: ENVÍO REAL por {env.get('SMTP_HOST')} desde {env.get('SMTP_USER')} "
+                "(los códigos llegan al correo del usuario).")
+    return ("Correo: MODO ARCHIVO. Los códigos NO se envían: quedan en .mail/ (solo para desarrollo y QA).\n"
+            "        Para enviarlos al correo real del usuario: python scripts/dev.py setup-mail")
+
+
+def base_env(pg_uri: str, mail_mode: str = "auto") -> dict:
     sqla_base = pg_uri.replace("postgresql://", "postgresql+psycopg://", 1).rsplit("/", 1)[0]
-    env = dict(os.environ)
+    env = local_env(mail_mode)
     env.update({
         "APP_ENV": "development",
-        "JWT_SECRET_KEY": env.get("JWT_SECRET_KEY", "dev-secret-change-me-dev-secret-change-me"),
-        "INTERNAL_API_TOKEN": env.get("INTERNAL_API_TOKEN", "dev-internal-token"),
         "AUTH_SERVICE_URL": f"http://127.0.0.1:{PORTS['auth']}",
         "WEATHER_SERVICE_URL": f"http://127.0.0.1:{PORTS['weather']}",
         "FORECAST_SERVICE_URL": f"http://127.0.0.1:{PORTS['forecast']}",
         "CATALOG_SERVICE_URL": f"http://127.0.0.1:{PORTS['catalog']}",
-        # Correo de desarrollo: los mensajes (con el código de confirmación) quedan en .mail/ en vez de enviarse.
-        "MAIL_BACKEND": env.get("MAIL_BACKEND", "file"),
         "MAIL_OUTBOX_DIR": env.get("MAIL_OUTBOX_DIR", str(ROOT / ".mail")),
         "MEDIA_ROOT": env.get("MEDIA_ROOT", str(ROOT / ".media")),
         "PYTHONUTF8": "1",
@@ -148,7 +204,8 @@ def up(env: dict) -> None:
         for service, port in PORTS.items():
             ok = wait_healthy(service, port)
             print(f"  {'✔' if ok else '✘'} {service:<9} http://127.0.0.1:{port}")
-        print(f"\nAbre http://127.0.0.1:{PORTS['web']}  (logs en {LOG_DIR}). Ctrl+C para detener.")
+        print(f"\n{mail_banner(env)}")
+        print(f"Abre http://127.0.0.1:{PORTS['web']}  (logs en {LOG_DIR}). Ctrl+C para detener.")
         while all(p.poll() is None for p in procs):
             time.sleep(1)
         print("Un servicio terminó; revisa los logs.")
@@ -164,31 +221,128 @@ def up(env: dict) -> None:
                 p.kill()
 
 
+def setup_mail() -> None:
+    """Guarda en .env.local el Gmail y su contraseña de aplicación. La contraseña se escribe aquí, sin mostrarse."""
+    import getpass
+    print("Configuración del correo que enviará los códigos de confirmación.\n"
+          "Necesitas una contraseña de aplicación de Google (verificación en dos pasos activada):\n"
+          "  https://myaccount.google.com/apppasswords\n")
+    user = input("Correo Gmail remitente: ").strip()
+    if "@" not in user or " " in user:
+        raise SystemExit("Ese correo no parece válido.")
+    password = getpass.getpass("Contraseña de aplicación (no se muestra): ").replace(" ", "")
+    if len(password) < 8:
+        raise SystemExit("La contraseña de aplicación es demasiado corta; no se guardó nada.")
+    devenv.update_env_file({"SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "587", "SMTP_USER": user,
+                            "SMTP_PASSWORD": password, "SMTP_SECURITY": "starttls"})
+    print("\nGuardado en .env.local (ignorado por git). Prueba el envío con:\n"
+          "  python scripts/dev.py test-mail tu_correo@gmail.com")
+
+
+def test_mail(to: str) -> None:
+    env = local_env()
+    if env["MAIL_BACKEND"] != "smtp":
+        raise SystemExit("El correo real no está configurado. Primero ejecuta: python scripts/dev.py setup-mail")
+    flask("auth", env, "mail-test", to)
+
+
+# ------------------------------------------------------------------- comandos
+# Cada comando se registra con ``@command``. Añadir uno nuevo es escribir una función con el decorador: ``main`` no se
+# modifica (principio abierto/cerrado). ``needs_database`` hace que se levante PostgreSQL y se prepare el entorno antes.
+@dataclass(frozen=True)
+class Command:
+    name: str
+    help: str
+    run: Callable[[argparse.Namespace, "dict | None"], None]
+    needs_database: bool = False
+    configure: Callable[[argparse.ArgumentParser], None] = lambda parser: None
+
+
+COMMANDS: dict[str, Command] = {}
+
+
+def command(name: str, help: str, *, needs_database: bool = False, configure=None):
+    def decorator(func):
+        COMMANDS[name] = Command(name, help, func, needs_database, configure or (lambda parser: None))
+        return func
+    return decorator
+
+
+def _configure_up(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--mail", choices=["auto", "file"], default="auto",
+                        help="auto: SMTP si está configurado; file: deja los correos en .mail/")
+
+
+@command("up", "migra la base de datos y levanta los servicios", needs_database=True, configure=_configure_up)
+def _cmd_up(args, env) -> None:
+    migrate(env)
+    up(env)
+
+
+@command("migrate", "aplica las migraciones", needs_database=True)
+def _cmd_migrate(args, env) -> None:
+    migrate(env)
+
+
+def _configure_makemigrations(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("message", nargs="?", default="cambios de esquema")
+    parser.add_argument("--service", choices=list(DBS), help="solo este servicio")
+
+
+@command("makemigrations", "genera una migración nueva (Alembic)", needs_database=True,
+         configure=_configure_makemigrations)
+def _cmd_makemigrations(args, env) -> None:
+    if args.service:
+        migrate(env)
+    makemigrations(env, args.message, args.service)
+
+
+@command("setup-mail", "guarda el Gmail y su contraseña de aplicación en .env.local")
+def _cmd_setup_mail(args, env) -> None:
+    setup_mail()
+
+
+@command("test-mail", "envía un correo de prueba con la configuración actual",
+         configure=lambda parser: parser.add_argument("to"))
+def _cmd_test_mail(args, env) -> None:
+    test_mail(args.to)
+
+
+@command("create-admin", "crea un administrador (la contraseña se pide sin mostrarla)", needs_database=True)
+def _cmd_create_admin(args, env) -> None:
+    flask("auth", env, "create-admin")
+
+
+def _configure_set_role(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("email")
+    parser.add_argument("role", choices=["user", "admin"])
+
+
+@command("set-role", "cambia el rol de una cuenta existente", needs_database=True, configure=_configure_set_role)
+def _cmd_set_role(args, env) -> None:
+    flask("auth", env, "set-role", args.email, args.role)
+
+
 def main() -> None:
     for stream in (sys.stdout, sys.stderr):          # la consola de Windows puede ser cp1252 al canalizar la salida
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd")
-    sub.add_parser("up")
-    sub.add_parser("migrate")
-    mm = sub.add_parser("makemigrations")
-    mm.add_argument("message", nargs="?", default="cambios de esquema")
-    mm.add_argument("--service", choices=list(DBS), help="solo este servicio")
+    for cmd in COMMANDS.values():
+        cmd.configure(sub.add_parser(cmd.name, help=cmd.help))
     args = parser.parse_args()
+    if args.cmd is None:                              # sin comando: levantar el sistema
+        args = parser.parse_args(["up"])
+    cmd = COMMANDS[args.cmd]
 
-    server, uri = start_postgres()
-    print(f"PostgreSQL embebido: {uri}")
-    ensure_databases(uri)
-    env = base_env(uri)
-    if args.cmd == "makemigrations":
-        migrate(env) if args.service else None
-        makemigrations(env, args.message, args.service)
-    elif args.cmd == "migrate":
-        migrate(env)
-    else:
-        migrate(env)
-        up(env)
+    env = None
+    if cmd.needs_database:
+        server, uri = start_postgres()                # ``server`` debe seguir vivo mientras dure el comando
+        print(f"PostgreSQL embebido: {uri}")
+        ensure_databases(uri)
+        env = base_env(uri, getattr(args, "mail", "auto"))
+    cmd.run(args, env)
 
 
 if __name__ == "__main__":

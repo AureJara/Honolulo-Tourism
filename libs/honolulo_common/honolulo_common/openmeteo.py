@@ -1,7 +1,7 @@
-"""Cliente del proveedor meteorológico externo (Open-Meteo, sin API key).
+"""Proveedor meteorológico Open-Meteo (sin API key): una implementación de ``WeatherProvider``.
 
-Es el único punto de contacto con el proveedor: si se cambia de proveedor solo hay que
-reemplazar este módulo manteniendo la interfaz (``fetch_current`` / ``fetch_hourly``).
+Es el único módulo que conoce a Open-Meteo. Para usar otro proveedor se escribe un módulo equivalente que se registra
+con ``@register_provider`` (ver ``weather_provider``); este no se modifica.
 Los datos nunca se inventan (RN03): si el proveedor falla se lanza ``ProviderError``.
 """
 
@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import logging
 import time
-from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
 import requests
+
+from .weather_provider import FetchStats, ProviderError, Reading, register_provider
 
 log = logging.getLogger(__name__)
 
@@ -30,36 +32,6 @@ _CURRENT_VARS = (
 )
 
 
-class ProviderError(Exception):
-    """El proveedor no respondió o devolvió datos inválidos."""
-
-    def __init__(self, message: str, *, http_status: int | None = None) -> None:
-        super().__init__(message)
-        self.http_status = http_status
-
-
-@dataclass
-class Reading:
-    """Una lectura meteorológica normalizada (instantes en UTC)."""
-
-    time_utc: datetime
-    temperature_c: float | None
-    feels_like_c: float | None
-    humidity_pct: int | None
-    precipitation_mm: float | None
-    rain_probability_pct: int | None
-    wind_kph: float | None
-    cloud_cover_pct: int | None
-    weather_code: int | None
-    is_day: bool | None
-
-
-@dataclass
-class FetchStats:
-    latency_ms: int
-    http_status: int | None
-
-
 def _num(value, cast=float):
     return None if value is None else cast(value)
 
@@ -69,6 +41,8 @@ def _local_to_utc(text: str, tz: ZoneInfo) -> datetime:
 
 
 class OpenMeteoClient:
+    name = PROVIDER_NAME
+
     def __init__(self, base_url: str = DEFAULT_BASE_URL, timeout: float = 10.0,
                  retries: int = 1, session: requests.Session | None = None) -> None:
         self.base_url = base_url
@@ -185,3 +159,8 @@ class OpenMeteoClient:
             weather_code=_num(cur.get("weather_code"), int),
             is_day=None if cur.get("is_day") is None else bool(cur["is_day"]),
         )
+
+
+@register_provider(PROVIDER_NAME)
+def _build(config: Mapping[str, Any]) -> OpenMeteoClient:
+    return OpenMeteoClient(base_url=config["PROVIDER_BASE_URL"], timeout=config["PROVIDER_TIMEOUT_S"])

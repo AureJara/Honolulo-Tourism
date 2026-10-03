@@ -1,28 +1,19 @@
 from __future__ import annotations
 
-import re
-
 from flask import request
 from marshmallow import EXCLUDE, Schema, ValidationError, fields, validate, validates_schema
 
 from honolulo_common.errors import ApiError, validation_error
 
-_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")      # conserva \n y \t
+from .text import clean_text
 
 
-def _clean_text(value: str, *, multiline: bool = False) -> str:
-    value = _CONTROL.sub("", value).strip()
-    if not multiline:
-        value = re.sub(r"\s+", " ", value)
-    return value
-
-
-class _Base(Schema):
+class BaseSchema(Schema):
     class Meta:
         unknown = EXCLUDE
 
 
-class PlaceFields(_Base):
+class PlaceFields(BaseSchema):
     name = fields.String(validate=validate.Length(min=3, max=120))
     description = fields.String(validate=validate.Length(min=20, max=2000))
     difficulty = fields.String(allow_none=True, validate=validate.OneOf(["easy", "moderate", "hard"]))
@@ -45,7 +36,7 @@ class PlaceCreateSchema(PlaceFields):
     description = fields.String(required=True, validate=validate.Length(min=20, max=2000))
 
 
-class PhotoUpdateSchema(_Base):
+class PhotoUpdateSchema(BaseSchema):
     alt_text = fields.String(validate=validate.Length(min=3, max=200))
     is_cover = fields.Boolean()
     sort_order = fields.Integer(strict=True, validate=validate.Range(min=0, max=1000))
@@ -64,9 +55,9 @@ def load_body(schema: Schema, *, partial: bool = False) -> dict:
                        errors=[{"field": "_", "message": "Envía al menos un campo para modificar."}])
     for key in ("name", "depth_label", "alt_text"):
         if isinstance(data.get(key), str):
-            data[key] = _clean_text(data[key])
+            data[key] = clean_text(data[key])
     if isinstance(data.get("description"), str):
-        data["description"] = _clean_text(data["description"], multiline=True)
+        data["description"] = clean_text(data["description"], multiline=True)
     # Tras limpiar puede haber quedado por debajo del mínimo (p. ej. solo espacios)
     for key, minimum in (("name", 3), ("description", 20), ("alt_text", 3)):
         if key in data and len(data[key]) < minimum:

@@ -46,11 +46,26 @@ def register_health(app: Flask, service: str, db=None) -> None:
         return jsonify(status="ready", service=service)
 
 
-def require_production_secrets(app: Flask, *keys: str) -> None:
-    """En producción no se aceptan secretos por defecto."""
-    if app.config.get("APP_ENV") != "production":
-        return
+MIN_SECRET_LENGTH = 32
+_WEAK_SECRETS = {"secret", "changeme", "change-me", "password", "honolulo", "admin", "jwt-secret", "dev-secret"}
+
+
+def require_secrets(app: Flask, *keys: str) -> None:
+    """Los secretos nunca viajan en el código: se leen del entorno y el servicio no arranca sin ellos.
+
+    En desarrollo ``scripts/dev.py`` genera valores aleatorios en ``.env.local`` (fuera de git). Las pruebas
+    automáticas (``TESTING``) pasan sus propios valores y solo se exige que no estén vacíos.
+    """
+    testing = bool(app.config.get("TESTING"))
     for key in keys:
-        value = app.config.get(key, "")
-        if not value or str(value).startswith("dev-"):
-            raise RuntimeError(f"{key} debe configurarse con un valor seguro en producción")
+        value = str(app.config.get(key) or "")
+        if not value:
+            raise RuntimeError(
+                f"{key} no está configurado. Defínelo en el entorno (en desarrollo, `python scripts/dev.py up` "
+                "lo genera solo) con: python -c \"import secrets; print(secrets.token_urlsafe(48))\"")
+        if testing:
+            continue
+        lowered = value.lower()
+        if len(value) < MIN_SECRET_LENGTH or lowered in _WEAK_SECRETS or lowered.startswith("dev-"):
+            raise RuntimeError(f"{key} es demasiado débil: usa al menos {MIN_SECRET_LENGTH} caracteres aleatorios")
+

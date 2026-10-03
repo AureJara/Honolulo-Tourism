@@ -1,4 +1,6 @@
-"""Lógica del catálogo: lugares, fotos y auditoría de los cambios del administrador."""
+"""Lógica del catálogo: lugares, fotos y auditoría de los cambios del administrador.
+
+Las opiniones de los visitantes tienen su propio módulo (``reviews``)."""
 
 from __future__ import annotations
 
@@ -15,6 +17,7 @@ from honolulo_common.errors import ApiError
 from .extensions import db
 from .images import THUMB_SIZE, ImageRejected, process_image
 from .models import Place, PlaceAudit, PlacePhoto
+from .reviews import rating_summaries
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +65,10 @@ def serialize_photo(photo: PlacePhoto) -> dict:
             "thumb_width": thumb_width(photo.width, photo.height)}
 
 
-def serialize_place(place: Place, *, admin: bool = False) -> dict:
+def serialize_place(place: Place, *, admin: bool = False, ratings: dict | None = None) -> dict:
+    """``ratings``: resumen de puntuaciones por lugar (``rating_summaries``); si falta, se consulta este lugar."""
+    if ratings is None:
+        ratings = rating_summaries([place.id])
     photos = list(place.photos)
     cover = next((p for p in photos if p.is_cover), photos[0] if photos else None)
     body = {
@@ -78,6 +84,7 @@ def serialize_place(place: Place, *, admin: bool = False) -> dict:
                    "width": cover.width, "height": cover.height, "thumb_width": thumb_width(cover.width, cover.height)}
                   if cover else None),
         "photos": [serialize_photo(p) for p in photos],
+        "rating": ratings.get(place.id, {"average": None, "count": 0}),
         "updated_at": place.updated_at.isoformat() if place.updated_at else None,
     }
     if admin:

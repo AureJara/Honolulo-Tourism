@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask
 
-from honolulo_common.openmeteo import ProviderError
+from honolulo_common.weather_provider import ProviderError
 from honolulo_common.timeutil import utcnow
 
 log = logging.getLogger(__name__)

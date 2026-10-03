@@ -1,9 +1,9 @@
-import re
 
 import pytest
 import responses
 
 from app import create_app, upstream
+from honolulo_common.testing import search_or_fail
 
 AUTH, WEATHER, FORECAST, CATALOG = "http://auth.test", "http://weather.test", "http://forecast.test", "http://catalog.test"
 USER = {"id": "u1", "email": "ana@example.com", "first_name": "Ana", "last_name": "Ríos", "full_name": "Ana Ríos",
@@ -15,7 +15,7 @@ ADMIN = {**USER, "id": "a1", "email": "admin@example.com", "first_name": "Admin"
 @pytest.fixture()
 def app():
     upstream.coordinator._recent.clear()
-    return create_app({"TESTING": True, "AUTH_SERVICE_URL": AUTH, "WEATHER_SERVICE_URL": WEATHER,
+    return create_app({"TESTING": True, "SECRET_KEY": "test-web-secret-test-web-secret-123", "AUTH_SERVICE_URL": AUTH, "WEATHER_SERVICE_URL": WEATHER,
                        "FORECAST_SERVICE_URL": FORECAST, "CATALOG_SERVICE_URL": CATALOG,
                        "UPSTREAM_TIMEOUT_S": 2})
 
@@ -38,7 +38,7 @@ def login_cookies(client, access="access-1", refresh="refresh-1"):
 
 def csrf_from(client, path="/ingresar"):
     html = client.get(path).get_data(as_text=True)
-    return re.search(r'name="csrf_token" value="([^"]+)"', html).group(1)
+    return search_or_fail(r'name="csrf_token" value="([^"]+)"', html).group(1)
 
 
 def cookie_header(resp, name):

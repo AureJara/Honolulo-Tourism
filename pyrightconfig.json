@@ -1,0 +1,17 @@
+{
+  "pythonVersion": "3.11",
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": ["libs/honolulo_common"],
+  "exclude": ["**/__pycache__", ".venv", ".pgdata", ".media", ".logs", ".mail", "**/migrations"],
+  "executionEnvironments": [
+    { "root": "services/auth", "extraPaths": ["services/auth", "libs/honolulo_common"] },
+    { "root": "services/weather", "extraPaths": ["services/weather", "libs/honolulo_common"] },
+    { "root": "services/forecast", "extraPaths": ["services/forecast", "libs/honolulo_common"] },
+    { "root": "services/catalog", "extraPaths": ["services/catalog", "libs/honolulo_common"] },
+    { "root": "services/web", "extraPaths": ["services/web", "libs/honolulo_common"] },
+    { "root": "qa", "extraPaths": ["qa", "scripts", "libs/honolulo_common"] },
+    { "root": "scripts", "extraPaths": ["scripts", "libs/honolulo_common"] },
+    { "root": "libs/honolulo_common", "extraPaths": ["libs/honolulo_common", "scripts"] }
+  ]
+}

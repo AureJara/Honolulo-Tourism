@@ -4,7 +4,7 @@ import click
 from flask import Flask
 
 from honolulo_common.app_setup import (configure_logging, init_request_id, register_health,
-                                       require_production_secrets)
+                                       require_secrets)
 from honolulo_common.errors import register_error_handlers
 
 from .config import Config
@@ -18,7 +18,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if overrides:
         app.config.update(overrides)
-    require_production_secrets(app, "JWT_SECRET_KEY")
+    require_secrets(app, "JWT_SECRET_KEY")
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -29,7 +29,9 @@ def create_app(overrides: dict | None = None) -> Flask:
 
     from . import models  # noqa: F401
     from .api import bp
+    from .reviews_api import bp as reviews_bp
     app.register_blueprint(bp)
+    app.register_blueprint(reviews_bp)
 
     @app.after_request
     def security_headers(resp):

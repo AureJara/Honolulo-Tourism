@@ -1,5 +1,5 @@
 """Páginas HTML: acceso (RF01), registro con confirmación de correo (Escenarios 7 y 8),
-política de privacidad y la pantalla principal de Honolulo."""
+políticas de privacidad y de cookies, y la pantalla principal de Honolulo."""
 
 from __future__ import annotations
 
@@ -202,6 +202,24 @@ def logout():
 @bp.get("/politica-de-privacidad")
 def privacy():
     return render_template("privacy.html", csrf_token=csrf_token(), user=None)
+
+
+@bp.get("/politica-de-cookies")
+def cookies():
+    """Qué cookies usa el sitio (solo esenciales), cuánto duran y para qué sirven."""
+    cfg = current_app.config
+    days = cfg["REFRESH_COOKIE_MAX_AGE"] // 86400
+    table = [
+        (cfg["ACCESS_COOKIE"], "Mantiene tu sesión iniciada (credencial de acceso de corta duración).",
+         f"{cfg['ACCESS_TOKEN_MINUTES']} minutos"),
+        (cfg["REFRESH_COOKIE"], "Renueva tu sesión sin pedirte de nuevo la contraseña.",
+         f"hasta {days} días o hasta que cierres sesión"),
+        (cfg["CSRF_COOKIE"], "Protege los formularios contra envíos falsos desde otros sitios.",
+         "hasta que cierres el navegador"),
+        (cfg["SESSION_COOKIE_NAME"], "Recuerda temporalmente el correo pendiente de confirmar y los avisos en pantalla.",
+         "hasta que cierres el navegador"),
+    ]
+    return render_template("cookies.html", csrf_token=csrf_token(), user=None, cookies=table)
 
 
 @bp.get("/")

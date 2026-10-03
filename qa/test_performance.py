@@ -72,7 +72,7 @@ def test_main_page_and_static_assets_load_fast(member_web):
 
 def test_concurrent_distinct_users_do_not_interfere():
     """Varias sesiones distintas a la vez: cada una ve su propio nombre y nadie recibe datos de otro."""
-    from conftest import code_from_mail, latest_mail, unique_email
+    from conftest import unique_email
     users = []
     for i in range(4):
         w, email = Web(), unique_email()

@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from honolulo_common.conditions import condition_code_from_wmo, describe
 from honolulo_common.errors import ApiError
 from honolulo_common.location import Location
-from honolulo_common.openmeteo import PROVIDER_NAME, ProviderError
+from honolulo_common.weather_provider import ProviderError
 from honolulo_common.timeutil import as_utc, iso_local, local_hour_to_utc, utcnow
 
 from . import observations
@@ -98,7 +98,7 @@ def _last_attempt_at() -> datetime | None:
 def _log_fetch(ok: bool, error: str | None = None) -> None:
     stats = getattr(provider(), "last_stats", None)
     db.session.add(ProviderFetchLog(
-        provider=PROVIDER_NAME, ok=ok, http_status=getattr(stats, "http_status", None),
+        provider=provider().name, ok=ok, http_status=getattr(stats, "http_status", None),
         latency_ms=getattr(stats, "latency_ms", None), error=(error or "")[:300] or None, fetched_at=utcnow()))
     db.session.commit()
 
@@ -121,7 +121,7 @@ def refresh_forecast() -> int:
         "temperature_c": p.temperature_c, "feels_like_c": p.feels_like_c, "humidity_pct": p.humidity_pct,
         "precipitation_mm": p.precipitation_mm or 0, "rain_probability_pct": p.rain_probability_pct,
         "wind_kph": p.wind_kph, "cloud_cover_pct": p.cloud_cover_pct, "weather_code": p.weather_code,
-        "condition": condition_code_from_wmo(p.weather_code), "provider": PROVIDER_NAME,
+        "condition": condition_code_from_wmo(p.weather_code), "provider": provider().name,
     } for p in points if p.time_utc > issued_at and p.temperature_c is not None]
     if rows:
         stmt = pg_insert(WeatherForecast).values(rows).on_conflict_do_nothing(constraint="uq_forecast_issue_target")

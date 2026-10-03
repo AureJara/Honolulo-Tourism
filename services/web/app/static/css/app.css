@@ -21,3 +21,6 @@
 
 /* Foco visible coherente con el diseño */
 :focus-visible { outline: 2px solid #236847; outline-offset: 2px; }
+
+/* Con una ventana modal abierta (opiniones) la página de fondo no se desplaza; sin JavaScript que pueda olvidarse. */
+html:has(dialog[open]) { overflow: hidden; }

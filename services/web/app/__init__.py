@@ -4,7 +4,7 @@ import requests
 from flask import Flask, abort, g, jsonify, render_template, request
 from werkzeug.exceptions import HTTPException, MethodNotAllowed, NotFound, RequestEntityTooLarge
 
-from honolulo_common.app_setup import configure_logging, init_request_id, require_production_secrets
+from honolulo_common.app_setup import configure_logging, init_request_id, require_secrets
 from honolulo_common.errors import ApiError, problem_response, register_error_handlers
 from honolulo_common.location import Location
 
@@ -30,7 +30,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if overrides:
         app.config.update(overrides)
-    require_production_secrets(app, "SECRET_KEY")
+    require_secrets(app, "SECRET_KEY")
 
     init_request_id(app)
     register_error_handlers(app)                 # ApiError → JSON (API)
@@ -58,6 +58,14 @@ def create_app(overrides: dict | None = None) -> Flask:
         resp.headers.setdefault("X-Content-Type-Options", "nosniff")
         resp.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
         resp.headers.setdefault("X-Frame-Options", "DENY")
+        resp.headers.setdefault("Permissions-Policy", "geolocation=(), camera=(), microphone=(), payment=()")
+        resp.headers.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        # Sin restringir scripts (el diseño usa Tailwind por CDN), pero sí lo que no depende de ellos:
+        # nadie puede enmarcar el sitio, cambiar su <base> ni enviar formularios a otro dominio.
+        resp.headers.setdefault("Content-Security-Policy",
+                                "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'")
+        if app.config["COOKIE_SECURE"]:                      # HTTPS (producción): el navegador no volverá a usar HTTP
+            resp.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
         if not request.path.startswith("/static/"):
             resp.headers.setdefault("Cache-Control", "no-store")
         return resp
@@ -86,11 +94,12 @@ def create_app(overrides: dict | None = None) -> Flask:
                                message="Ocurrió un error inesperado. Inténtalo nuevamente."), 500
 
     from .admin import bp as admin_bp
+    from .admin_reviews import bp as admin_reviews_bp
     from .api import bp as api_bp
     from .pages import bp as pages_bp
-    app.register_blueprint(api_bp)
-    app.register_blueprint(pages_bp)
-    app.register_blueprint(admin_bp)
+    from .reviews_api import bp as reviews_api_bp
+    for blueprint in (api_bp, reviews_api_bp, pages_bp, admin_bp, admin_reviews_bp):
+        app.register_blueprint(blueprint)
 
     @app.get("/healthz")
     def healthz():

@@ -185,7 +185,7 @@ def test_consent_and_policy_version_are_recorded(app, client):
     register(client)
     with app.app_context():
         user = db.session.execute(db.select(User)).scalar_one()
-        assert user.privacy_accepted_at is not None and user.privacy_policy_version == "2026-10"
+        assert user.privacy_accepted_at is not None and user.privacy_policy_version == "2026-10-03"
 
 
 # --------------------------------------------- Escenario 8: nombre y apellido reales
@@ -270,7 +270,13 @@ def test_someone_else_cannot_hijack_a_pending_account_without_the_mailbox(app, c
         assert db.session.execute(db.select(User)).scalar_one().email_verified_at is None
 
 
-@pytest.mark.parametrize("password", ["corta1", "soloLetrasAqui", "123456789", "", "a" * 129 + "1"])
+@pytest.mark.parametrize("password", [
+    "corta1", "soloLetrasAqui", "123456789", "", "a" * 129 + "1",
+    "clave1234",                    # 9 caracteres: bajo el mínimo de 10
+    "password123", "Contraseña2026", "qwerty123456", "abcdefgh12",      # comunes o predecibles
+    "aaaaaaaaaa1",                  # sin variedad
+    "Ana-Rios-2026x",               # contiene el apellido
+])
 def test_password_policy(client, password):
     resp = register(client, password=password)
     assert resp.status_code == 422 and "password" in [e["field"] for e in resp.get_json()["errors"]]
@@ -293,5 +299,5 @@ def test_html_in_name_cannot_reach_the_verification_email(app, client):
 
 
 def test_email_body_escapes_html_in_the_html_alternative():
-    from app.mailer import _html
-    assert _html("<img src=x onerror=alert(1)>") == "&lt;img src=x onerror=alert(1)&gt;"
+    from app.mail_templates import escape_html
+    assert escape_html("<img src=x onerror=alert(1)>") == "&lt;img src=x onerror=alert(1)&gt;"

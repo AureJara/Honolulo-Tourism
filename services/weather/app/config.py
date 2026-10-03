@@ -7,11 +7,14 @@ class Config:
         "DATABASE_URL", "postgresql+psycopg://postgres@127.0.0.1:5432/weather_db")
     SQLALCHEMY_ENGINE_OPTIONS = {"pool_pre_ping": True}
 
-    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-change-me-dev-secret-change-me")
+    JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
     JWT_ISSUER = os.getenv("JWT_ISSUER", "honolulo-auth")
     JWT_AUDIENCE = os.getenv("JWT_AUDIENCE", "honolulo-api")
-    INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN", "dev-internal-token")
+    INTERNAL_API_TOKEN = os.getenv("INTERNAL_API_TOKEN", "")
 
+    # Proveedor meteorológico: se elige por nombre (ver honolulo_common/weather_provider.py).
+    WEATHER_PROVIDER = os.getenv("WEATHER_PROVIDER", "open-meteo")
+    WEATHER_PROVIDER_MODULES = os.getenv("WEATHER_PROVIDER_MODULES", "")      # módulos extra que registran proveedores
     PROVIDER_BASE_URL = os.getenv("WEATHER_PROVIDER_URL", "https://api.open-meteo.com/v1/forecast")
     PROVIDER_TIMEOUT_S = float(os.getenv("WEATHER_PROVIDER_TIMEOUT_S", "10"))
 

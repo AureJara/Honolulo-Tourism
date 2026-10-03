@@ -221,7 +221,6 @@ def test_sql_injection_payloads_never_cause_errors_or_delays(member_web, payload
 
 def _purge_place(place_id: str) -> None:
     """Borra el lugar de prueba (y sus fotos en disco) para no ensuciar el entorno de desarrollo."""
-    import pathlib
     import psycopg
     import pgserver
     from conftest import ROOT

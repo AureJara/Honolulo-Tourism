@@ -2,7 +2,7 @@
 """Ejecuta todas las suites de pruebas (librería común + cada microservicio).
 
 Las pruebas usan PostgreSQL real: si no define TEST_DATABASE_URL (servidor PostgreSQL, p. ej.
-``postgresql://postgres:pass@localhost:5432/postgres``) se levanta uno embebido con pgserver.
+``postgresql://<usuario>:<clave>@localhost:5432/postgres``) se levanta uno embebido con pgserver.
 """
 
 import subprocess
@@ -15,6 +15,9 @@ SUITES = ["libs/honolulo_common", "services/auth", "services/weather", "services
 
 def main() -> int:
     failed = []
+    print("\n=== secretos en el código ===", flush=True)
+    if subprocess.call([sys.executable, str(ROOT / "scripts" / "check_secrets.py")], cwd=ROOT):
+        failed.append("secretos en el código")
     for suite in SUITES:
         print(f"\n=== {suite} ===", flush=True)
         code = subprocess.call([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", *sys.argv[1:]],

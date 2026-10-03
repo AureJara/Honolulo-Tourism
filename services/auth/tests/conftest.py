@@ -1,4 +1,3 @@
-import re
 from datetime import timedelta
 
 import pytest
@@ -6,10 +5,10 @@ import pytest
 from app import create_app
 from app.extensions import db
 from app.models import EmailVerification
-from honolulo_common.testing import create_test_database
+from honolulo_common.testing import create_test_database, search_or_fail
 from honolulo_common.timeutil import utcnow
 
-PASSWORD = "clave1234"
+PASSWORD = "Verde-Selva-742"
 
 
 @pytest.fixture(scope="session")
@@ -47,7 +46,7 @@ def last_code(app, to=None) -> str:
     """Código de 6 dígitos del último correo enviado (a ``to`` si se indica)."""
     messages = [m for m in outbox(app) if to is None or m["To"] == to]
     assert messages, "no se envió ningún correo"
-    return re.search(r"\b(\d{6})\b", messages[-1].get_body(("plain",)).get_content()).group(1)
+    return search_or_fail(r"\b(\d{6})\b", messages[-1].get_body(("plain",)).get_content()).group(1)
 
 
 def register_payload(**overrides):

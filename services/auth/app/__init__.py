@@ -5,10 +5,11 @@ from flask import Flask
 from werkzeug.security import generate_password_hash
 
 from honolulo_common.app_setup import (configure_logging, init_request_id, register_health,
-                                       require_production_secrets)
+                                       require_secrets)
 from honolulo_common.errors import register_error_handlers
 from honolulo_common.timeutil import utcnow
 
+from . import mailer
 from .config import Config
 from .extensions import db, migrate
 
@@ -19,9 +20,9 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if overrides:
         app.config.update(overrides)
-    require_production_secrets(app, "JWT_SECRET_KEY")
-    if app.config["APP_ENV"] == "production" and app.config["MAIL_BACKEND"] != "smtp":
-        raise RuntimeError("En producción MAIL_BACKEND debe ser 'smtp'")
+    require_secrets(app, "JWT_SECRET_KEY")
+    if app.config["APP_ENV"] == "production" and not mailer.backend(app.config["MAIL_BACKEND"]).external:
+        raise RuntimeError("En producción MAIL_BACKEND debe enviar por Internet (smtp)")
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -35,24 +36,58 @@ def create_app(overrides: dict | None = None) -> Flask:
 
     @app.cli.command("create-admin")
     @click.option("--email", prompt=True)
-    @click.option("--first-name", prompt="Nombre")
-    @click.option("--last-name", prompt="Apellido")
-    @click.password_option()
-    def create_admin(email, first_name, last_name, password):
-        """Crea (o promueve) un administrador. Queda con el correo ya confirmado."""
+    def create_admin(email):
+        """Crea un administrador (o promueve una cuenta existente). La contraseña se pide sin mostrarla."""
         from .emails import canonical_email, normalize_email
         from .models import User
+        from .names import InvalidName, clean_person_name
+        from .passwords import check_password
         email = normalize_email(email)
         user = db.session.execute(
             db.select(User).where(User.email_canonical == canonical_email(email))).scalar_one_or_none()
         if user is None:
-            user = User(email=email, email_canonical=canonical_email(email), first_name=first_name.strip(),
-                        last_name=last_name.strip(), password_hash=generate_password_hash(password))
+            try:
+                first_name = clean_person_name(click.prompt("Nombre"))
+                last_name = clean_person_name(click.prompt("Apellido"))
+            except InvalidName as exc:
+                raise click.ClickException(str(exc)) from exc
+            password = click.prompt("Contraseña", hide_input=True, confirmation_prompt=True)
+            problem = check_password(password, min_len=app.config["PASSWORD_MIN_LENGTH"],
+                                     personal=(first_name, last_name, email.split("@")[0]))
+            if problem:
+                raise click.ClickException(problem)
+            user = User(email=email, email_canonical=canonical_email(email), first_name=first_name,
+                        last_name=last_name,
+                        password_hash=generate_password_hash(password, method=app.config["PASSWORD_HASH_METHOD"]))
             db.session.add(user)
         user.role = "admin"
         user.email_verified_at = user.email_verified_at or utcnow()
         db.session.commit()
         click.echo(f"Administrador listo: {email}")
+
+    @app.cli.command("mail-test")
+    @click.argument("to")
+    def mail_test(to):
+        """Envía un correo de prueba con la configuración de correo actual (no contiene ningún código)."""
+        from email.message import EmailMessage
+
+        name = app.config["MAIL_BACKEND"]
+        message = EmailMessage()
+        message["Subject"] = "Prueba de correo de Honolulo"
+        message["From"] = app.config["MAIL_FROM"]
+        message["To"] = to
+        message.set_content("Este es un mensaje de prueba. Si lo recibes, Honolulo puede enviar los códigos "
+                            "de confirmación a los correos de los usuarios.")
+        try:
+            mailer.send(message)
+        except mailer.MailError as exc:
+            raise click.ClickException(f"No se pudo enviar ({name}): {exc}") from exc
+        chosen = mailer.backend(name)
+        if chosen.external:
+            click.echo(f"Correo de prueba enviado a {to} (backend '{name}'). Revisa tu bandeja (y spam).")
+        else:
+            where = f" (quedó en {chosen.describe()})" if chosen.describe() else ""
+            click.echo(f"Backend '{name}': el mensaje NO salió a Internet{where}.")
 
     @app.cli.command("set-role")
     @click.argument("email")

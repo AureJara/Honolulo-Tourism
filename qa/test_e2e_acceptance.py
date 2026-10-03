@@ -6,7 +6,7 @@ import time
 import pytest
 import requests
 
-from conftest import (AUTH_URL, BASE, CATALOG_URL, PASSWORD, Web, code_from_mail, jpeg, latest_mail, mail_body,
+from conftest import (BASE, CATALOG_URL, Web, code_from_mail, jpeg, latest_mail, mail_body,
                       mail_count, parse_mail, unique_email)
 
 

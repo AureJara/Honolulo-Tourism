@@ -4,10 +4,10 @@ import click
 from flask import Flask
 
 from honolulo_common.app_setup import (configure_logging, init_request_id, register_health,
-                                       require_production_secrets)
+                                       require_secrets)
 from honolulo_common.errors import register_error_handlers
 from honolulo_common.location import Location
-from honolulo_common.openmeteo import OpenMeteoClient
+from honolulo_common.weather_provider import create_provider
 
 from .config import Config
 from .extensions import db, migrate
@@ -19,7 +19,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     app.config.from_object(Config)
     if overrides:
         app.config.update(overrides)
-    require_production_secrets(app, "JWT_SECRET_KEY", "INTERNAL_API_TOKEN")
+    require_secrets(app, "JWT_SECRET_KEY", "INTERNAL_API_TOKEN")
 
     db.init_app(app)
     migrate.init_app(app, db)
@@ -28,8 +28,7 @@ def create_app(overrides: dict | None = None) -> Flask:
     register_health(app, "forecast-service", db)
 
     app.extensions["location"] = Location.from_env()
-    app.extensions["weather_client"] = OpenMeteoClient(
-        base_url=app.config["PROVIDER_BASE_URL"], timeout=app.config["PROVIDER_TIMEOUT_S"])
+    app.extensions["weather_client"] = create_provider(app.config)
 
     from . import models  # noqa: F401
     from .api import bp

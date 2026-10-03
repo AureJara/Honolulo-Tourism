@@ -111,7 +111,10 @@ tailwind.config = {
           Coordenadas: {{ coords_dms }}
         </p>
         <p class="text-xs text-tertiary mt-3">Datos meteorológicos: proveedor externo (Open-Meteo).</p>
-        <p class="text-xs mt-2"><a class="text-primary underline underline-offset-2" href="{{ url_for('pages.privacy') }}">Política de privacidad</a></p>
+        <p class="text-xs mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          <a class="text-primary underline underline-offset-2" href="{{ url_for('pages.privacy') }}">Política de privacidad</a>
+          <a class="text-primary underline underline-offset-2" href="{{ url_for('pages.cookies') }}">Política de cookies</a>
+        </p>
       </div>
     </div>
     <div class="pt-6 border-t border-outline-variant/30 text-sm text-on-surface-variant">
@@ -120,8 +123,26 @@ tailwind.config = {
   </div>
 </footer>
 {% endblock %}
+<div id="cookie-notice" hidden role="region" aria-label="Aviso de cookies" class="fixed bottom-0 inset-x-0 z-[45] px-3 pb-3 pointer-events-none">
+  <div class="max-w-4xl mx-auto pointer-events-auto flex flex-wrap items-center justify-between gap-3 px-5 py-3 rounded-xl shadow-2xl bg-inverse-surface text-inverse-on-surface">
+    <p class="text-sm flex-1 min-w-[16rem]">Honolulo usa <strong>solo cookies esenciales</strong> para mantener tu sesión y proteger los formularios. No usamos cookies de publicidad ni de seguimiento.
+      <a class="underline font-semibold" href="{{ url_for('pages.cookies') }}">Política de cookies</a> ·
+      <a class="underline font-semibold" href="{{ url_for('pages.privacy') }}">Privacidad</a></p>
+    <button type="button" id="cookie-ok" class="px-4 py-2 rounded-full bg-secondary-container text-on-secondary-fixed font-headline font-semibold text-sm hover:bg-secondary-fixed transition-colors">Entendido</button>
+  </div>
+</div>
 <script>
   document.getElementById('year').textContent = new Date().getFullYear();
+  // Aviso informativo de cookies esenciales: se recuerda en el navegador que ya se vio (si el navegador lo permite).
+  (function () {
+    var box = document.getElementById('cookie-notice'), KEY = 'hn_aviso_cookies', seen = false;
+    try { seen = localStorage.getItem(KEY) === '1'; } catch (e) { /* almacenamiento bloqueado: se muestra siempre */ }
+    if (!seen) box.hidden = false;
+    document.getElementById('cookie-ok').addEventListener('click', function () {
+      try { localStorage.setItem(KEY, '1'); } catch (e) { /* sin almacenamiento */ }
+      box.hidden = true;
+    });
+  })();
   // Los avisos (flash) se ocultan solos y se pueden cerrar con el botón.
   document.querySelectorAll('[data-flash]').forEach(function (el) { setTimeout(function () { el.remove(); }, Number(el.dataset.flash) || 6000); });
   document.addEventListener('click', function (e) { var b = e.target.closest('[data-flash-close]'); if (b) b.closest('[data-flash]').remove(); });
