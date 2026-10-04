@@ -20,6 +20,7 @@
       <li><strong>Consentimiento:</strong> la fecha y la versión de esta política que aceptaste.</li>
       <li><strong>Opiniones y puntuaciones:</strong> la puntuación de 1 a 5 estrellas, el comentario opcional y la fecha. Se muestran <em>públicamente</em> con tu nombre y la inicial de tu apellido (por ejemplo «Ana R.»). No publicamos tu correo ni tu apellido completo.</li>
       <li><strong>Datos técnicos de seguridad:</strong> fecha del último acceso, intentos fallidos de ingreso y el navegador asociado a cada sesión (para poder cerrarla si se detecta un uso indebido). Los registros técnicos del servidor pueden incluir la fecha, la ruta consultada y la dirección IP.</li>
+      <li><strong>Registro de eventos de seguridad:</strong> inicios de sesión correctos y fallidos, bloqueos de cuenta, confirmaciones de correo, cierres de sesión, posibles robos de sesión y cambios de rol. De cada evento guardamos la fecha, tu <em>dirección IP</em> y, del correo, solo una pista parcial (por ejemplo «a***@gmail.com»); nunca contraseñas ni códigos.</li>
     </ul>
 
     <h2 class="mt-8 font-headline text-xl font-bold">3. Para qué los usamos</h2>
@@ -28,6 +29,7 @@
       <li>Permitirte consultar el clima y el pronóstico de Honolulo para planificar tu visita.</li>
       <li>Publicar tus opiniones y puntuaciones sobre las cascadas y mostrar el promedio a otros visitantes.</li>
       <li>Moderar las opiniones para mantener un espacio respetuoso y proteger el servicio contra abusos.</li>
+      <li>Detectar y frenar abusos (adivinar contraseñas o códigos, envío masivo de correos, spam): limitamos el número de intentos por dirección IP y revisamos el registro de eventos de seguridad.</li>
     </ul>
     <p class="mt-2 text-on-surface-variant">No vendemos tus datos, no los usamos para publicidad y no elaboramos perfiles sobre ti.</p>
 
@@ -36,7 +38,7 @@
       <li><strong>Proveedor de correo</strong> (por ejemplo Gmail/Google, según la configuración del servicio): recibe tu correo y el código de confirmación solo para entregarte el mensaje.</li>
       <li><strong>Proveedor meteorológico</strong> (Open-Meteo): las consultas llevan únicamente las coordenadas del lugar, nunca tus datos.</li>
       <li><strong>Recursos de la página:</strong> las tipografías (Google Fonts) y los estilos (Tailwind CSS) se cargan desde servidores externos, que reciben la dirección IP y datos básicos de tu navegador. No les enviamos datos de tu cuenta.</li>
-      <li><strong>Administradores de Honolulo:</strong> pueden ver y moderar las opiniones; no tienen acceso a las contraseñas.</li>
+      <li><strong>Administradores de Honolulo:</strong> pueden ver y moderar las opiniones y consultar el registro de eventos de seguridad; no tienen acceso a las contraseñas.</li>
       <li><strong>Autoridades</strong>, únicamente cuando una ley o una orden válida lo exija.</li>
     </ul>
 
@@ -44,7 +46,8 @@
     <ul class="mt-2 list-disc pl-6 text-on-surface-variant space-y-1">
       <li>Contraseñas con hash y sal; se rechazan las contraseñas demasiado comunes o que contengan tu nombre o correo.</li>
       <li>Código de confirmación con vencimiento de 10 minutos, un máximo de intentos y reenvíos limitados.</li>
-      <li>Bloqueo temporal de la cuenta tras varios intentos fallidos de ingreso.</li>
+      <li>Bloqueo temporal de la cuenta tras varios intentos fallidos de ingreso y límite de intentos por dirección IP.</li>
+      <li>Registro de eventos de seguridad que permite detectar y reconstruir un uso indebido.</li>
       <li>Sesiones con cookies protegidas (no accesibles desde JavaScript) y conexión cifrada (HTTPS) en producción.</li>
     </ul>
     <p class="mt-2 text-on-surface-variant">Ningún sistema es infalible: usa una contraseña única. Honolulo <strong>nunca</strong> te pedirá tu contraseña ni el código de confirmación por teléfono, chat o correo.</p>
@@ -58,7 +61,7 @@
     </ul>
 
     <h2 class="mt-8 font-headline text-xl font-bold">7. Cuánto tiempo los conservamos</h2>
-    <p class="mt-2 text-on-surface-variant">Mientras tu cuenta esté activa. Las opiniones permanecen hasta que tú o un administrador las eliminen, o hasta que se cancele tu cuenta. Si no confirmas tu correo, la cuenta pendiente puede eliminarse pasados unos días. Los registros técnicos se conservan solo el tiempo necesario para la seguridad y el diagnóstico.</p>
+    <p class="mt-2 text-on-surface-variant">Mientras tu cuenta esté activa. Las opiniones permanecen hasta que tú o un administrador las eliminen, o hasta que se cancele tu cuenta. Si no confirmas tu correo, la cuenta pendiente puede eliminarse pasados unos días. Los registros técnicos se conservan solo el tiempo necesario para la seguridad y el diagnóstico, y los eventos de seguridad se borran pasados 180 días.</p>
 
     <h2 class="mt-8 font-headline text-xl font-bold">8. Tus derechos</h2>
     <p class="mt-2 text-on-surface-variant">Puedes solicitar el acceso, la rectificación, la cancelación y la oposición al tratamiento de tus datos personales (derechos ARCO, Ley N.° 29733 de Protección de Datos Personales del Perú) escribiendo a <a class="text-primary underline underline-offset-2" href="mailto:{{ contact_email }}">{{ contact_email }}</a>. Si consideras que no atendimos tu solicitud, puedes acudir a la Autoridad Nacional de Protección de Datos Personales.</p>

@@ -104,7 +104,7 @@ def test_the_accepted_policy_version_is_recorded(canary_account):
     with auth_db() as conn:
         (version,) = conn.execute("SELECT privacy_policy_version FROM users WHERE email_canonical = %s",
                                   (canary_account["email"],)).fetchone()
-    assert version == "2026-10-03"
+    assert version == "2026-10-04"
 
 
 # ---------------------------------------------------------------------- políticas
@@ -112,7 +112,7 @@ def test_privacy_and_cookie_policies_are_published():
     privacy = requests.get(f"{BASE}/politica-de-privacidad", timeout=20)
     cookies = requests.get(f"{BASE}/politica-de-cookies", timeout=20)
     assert privacy.status_code == 200 and cookies.status_code == 200
-    for expected in ("Opiniones y puntuaciones", "Proveedor de correo", "hash", "derechos ARCO", "Versión 2026-10-03"):
+    for expected in ("Opiniones y puntuaciones", "Proveedor de correo", "hash", "derechos ARCO", "Versión 2026-10-04"):
         assert expected in privacy.text
     for name in DOCUMENTED_COOKIES:
         assert name in cookies.text

@@ -21,7 +21,7 @@ class Config:
     # Un refresh token ya rotado se reutiliza este tiempo para peticiones paralelas del mismo navegador.
     REFRESH_REUSE_WINDOW_S = int(os.getenv("REFRESH_REUSE_WINDOW_S", "30"))
     # Política de privacidad vigente (debe coincidir con la de auth-service, que registra la aceptación).
-    PRIVACY_POLICY_VERSION = os.getenv("PRIVACY_POLICY_VERSION", "2026-10-03")
+    PRIVACY_POLICY_VERSION = os.getenv("PRIVACY_POLICY_VERSION", "2026-10-04")
     CONTACT_EMAIL = os.getenv("CONTACT_EMAIL", "contacto@honolulo-tingomaria.pe")
 
     # Sesión firmada de Flask: solo guarda el correo pendiente de confirmar y mensajes (flash).
@@ -29,6 +29,13 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1" if APP_ENV == "production" else "0") == "1"
+
+    # Límite de peticiones por IP (ver ratelimit.py). Solo se desactiva para la QA automática, que hace cientos de
+    # registros desde una misma IP (`dev.py up --no-rate-limit`).
+    RATE_LIMIT_ENABLED = os.getenv("RATE_LIMIT_ENABLED", "1") == "1"
+    # Cuántos proxies de confianza hay delante (p. ej. 1 con un Nginx). Con 0 se ignora X-Forwarded-For, porque
+    # cualquiera podría falsificarlo para saltarse el límite.
+    TRUSTED_PROXY_HOPS = int(os.getenv("TRUSTED_PROXY_HOPS", "0"))
 
     # Las peticiones normales son diminutas; solo la subida de fotos del administrador es grande.
     SMALL_REQUEST_LIMIT = 32 * 1024

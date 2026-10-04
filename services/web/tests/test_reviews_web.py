@@ -275,7 +275,7 @@ def test_cookie_policy_lists_every_cookie_the_site_sets(client):
         assert name in html
     assert "solo cookies esenciales" in html and "Cookies que NO usamos" in html and "hn_aviso_cookies" in html
     assert "15 minutos" in html and "7 días" in html and "Google Fonts" in html
-    assert "revisado por asesoría legal" in html and "Versión 2026-10-03" in html
+    assert "revisado por asesoría legal" in html and "Versión 2026-10-04" in html
 
 
 def test_the_site_sets_no_cookie_outside_the_documented_ones(client, mocked):
@@ -290,7 +290,7 @@ def test_the_site_sets_no_cookie_outside_the_documented_ones(client, mocked):
 
 def test_privacy_policy_covers_reviews_email_security_and_rights(client):
     html = client.get("/politica-de-privacidad").get_data(as_text=True)
-    for expected in ("Versión 2026-10-03", "Opiniones y puntuaciones", "inicial de tu apellido", "hash",
+    for expected in ("Versión 2026-10-04", "Opiniones y puntuaciones", "inicial de tu apellido", "hash",
                      "Proveedor de correo", "Open-Meteo", "Google Fonts", "fijar", "eliminar", "Ley N.° 29733",
                      "derechos ARCO", "Menores de edad", "política de cookies", "nunca</strong> te pedirá tu contraseña"):
         assert expected in html, expected
@@ -372,3 +372,12 @@ def test_dialog_buttons_dispatch_through_an_action_table(client, mocked):
     assert 'data-action="close"' in client.get("/").get_data(as_text=True)
     for legacy in ("data-pin=", "data-more", "data-delete-mine", "data-moderate-delete", "data-reviews-close"):
         assert legacy not in js
+
+
+def test_privacy_policy_discloses_the_security_log_ip_and_rate_limits(client):
+    """La política debe decir lo que de verdad se guarda: IP, eventos de seguridad, plazo de retención y límites por IP."""
+    html = client.get("/politica-de-privacidad").get_data(as_text=True)
+    for expected in ("Registro de eventos de seguridad", "dirección IP", "a***@gmail.com", "180 días",
+                     "límite de intentos por dirección IP", "consultar el registro de eventos de seguridad"):
+        assert expected in html, expected
+    assert "nunca contraseñas ni códigos" in html

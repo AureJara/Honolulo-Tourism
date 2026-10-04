@@ -5,7 +5,7 @@
 | **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
 | **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
-| **Resultado** | **799 pruebas automatizadas en verde** (634 unitarias/integración + 165 de QA de extremo a extremo) y 16 defectos encontrados y corregidos (ninguno crítico) |
+| **Resultado** | **889 pruebas automatizadas en verde** (714 unitarias/integración + 175 de QA de extremo a extremo) y 17 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,7 +14,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 634 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 714 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
@@ -23,6 +23,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Rendimiento (humo) | Latencia p50/p95 secuencial y con 10 usuarios concurrentes | `qa/test_performance.py` — 12 |
 | Opiniones y moderación (nuevo) | Publicar/editar/eliminar, validación y abuso, permisos, fijar (límite 3, concurrencia), eliminar con auditoría, HTML escapado | `qa/test_reviews_e2e.py` — 23 |
 | Entrega del correo (nuevo) | Servicio de cuentas real enviando por SMTP: el código llega al correo registrado, confirma la cuenta, fallos del servidor de correo | `qa/test_email_delivery.py` — 6 |
+| Límite por IP y auditoría (nuevo) | Fuerza bruta de contraseñas, registros masivos y escrituras de la API bloqueados con `429`; otras IP no afectadas; `X-Forwarded-For` no falsificable; la IP real llega al registro de auditoría; solo administradores lo leen | `qa/test_rate_limit_and_audit.py` — 10 |
 | Privacidad y secretos (nuevo) | La contraseña «canario» no aparece en registros, base ni correo; solo hash del código; políticas publicadas; cookies declaradas; cabeceras; ningún secreto expuesto | `qa/test_privacy_secrets.py` — 18 |
 | Exploratoria en navegador | Flujos reales, teclado, móvil (375 px), XSS en interfaz, **axe-core** (WCAG 2.1 AA) | manual, evidencia en §4 |
 
@@ -31,12 +32,12 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Suite | Pruebas | Resultado |
 |---|---:|---|
 | Revisión de secretos en el código (`scripts/check_secrets.py`) | — | ✅ |
-| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco) | 79 | ✅ |
-| `auth-service` | 118 | ✅ |
+| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas) | 103 | ✅ |
+| `auth-service` (incluye la auditoría de seguridad) | 143 | ✅ |
 | `weather-service` | 30 | ✅ |
 | `forecast-service` | 88 | ✅ |
 | `catalog-service` | 179 | ✅ |
-| `web` | 140 | ✅ |
+| `web` (incluye el límite por IP y la pantalla de seguridad) | 171 | ✅ |
 | QA: aceptación / seguridad / resiliencia / sesión / integridad / rendimiento | 28 / 49 / 7 / 6 / 16 / 12 | ✅ |
 | QA nuevo: opiniones y moderación / entrega de correo / privacidad y secretos | 23 / 6 / 18 | ✅ |
 
@@ -91,6 +92,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | **D14** | Media (a11y) | La tabla de cookies (región con scroll) no se podía enfocar con el teclado (axe: `scrollable-region-focusable`). | axe-core | ✅ Corregido (`role="region"`, `tabindex="0"`) + regresión |
 | **D15** | Media (operación) | Tras un cierre brusco (apagón, ventana cerrada) PostgreSQL tarda más de 10 s en recuperarse y `dev.py up` fallaba con `TimeoutExpired`; había que repetir el comando a mano. | Ocurrió varias veces durante las pruebas; reproducido matando PostgreSQL de golpe | ✅ Corregido: `dev.py` espera la recuperación (hasta 3 min), explica qué pasa y continúa solo + 3 pruebas |
 | **D16** | Baja (pruebas) | La contraseña aleatoria de QA podía contener un fragmento del correo de prueba (1 de cada 256 ejecuciones) y la nueva política la rechazaba: una prueba fallaba al azar. | Falla intermitente de `test_scenario7_gmail_aliases…` | ✅ Corregido: contraseña independiente del esquema de correos |
+| **D17** | Baja (herramientas) | Una corrida de `run_tests.py` dejó 137 errores en la suite de `auth` (`AssertionError` en `pgserver`): el PostgreSQL desechable de las pruebas no terminó de arrancar porque la suite anterior aún lo apagaba, y `pgserver` guarda la instancia fallida en su caché y la devuelve a medias en los intentos siguientes. | Falla intermitente en una corrida completa (no se repitió en 3 corridas posteriores) | ✅ Corregido: reintentos que descartan la instancia a medias + 2 pruebas |
 
 Defectos adicionales atrapados por las propias pruebas antes de llegar a QA: los dígitos Unicode de ancho completo pasaban la validación del código (regex `\d`); la bomba de píxeles se rechazaba con un mensaje engañoso.
 
@@ -111,6 +113,23 @@ abierto/cerrado o de responsabilidad única, **sin cambiar el comportamiento** (
 | `weather` y `forecast` creaban directamente el cliente de Open-Meteo y guardaban su nombre fijo: cambiar de proveedor obligaba a editar ambos servicios | interfaz `WeatherProvider` + registro `@register_provider`, elección con `WEATHER_PROVIDER`; el nombre del proveedor lo da el propio cliente | `test_weather_provider.py`, `test_provider_wiring.py` |
 | `dev.py` despachaba comandos con `if/elif` | tabla `@command` | `test_a_new_dev_command_needs_no_change_to_main` |
 | El servidor SMTP de pruebas y el JS de la ventana de opiniones despachaban con cadenas de `if` | métodos `do_<VERBO>` y tabla `ACTIONS` | `test_dialog_buttons_dispatch_through_an_action_table` |
+
+### Revisión de seguridad (lista de 15 puntos)
+
+Se revisó cada punto contra el código real (9 estaban resueltos, 6 parciales) y se cerraron los parciales de bajo riesgo:
+
+| Hallazgo | Corrección | Prueba |
+|---|---|---|
+| **S1 · Sin límite de peticiones por IP**: se podían probar contraseñas en muchas cuentas, crear cuentas en masa o disparar correos a direcciones ajenas | Límite por IP en la web (reglas ampliables, `429` + `Retry-After`, `X-Forwarded-For` solo con proxy de confianza) | `test_ratelimit.py` (19), `qa/test_rate_limit_and_audit.py` |
+| **S2 · Sin auditoría de acceso** (inicios de sesión, fallos, bloqueos, cambios de rol) | Registro de eventos en `auth` + pantalla `/admin/seguridad`, 180 días de retención, política de privacidad actualizada (v2026-10-04) | `test_audit.py` (25), `test_admin_security.py` |
+| **S3 · Entorno distinto al declarado**: el entorno de pruebas tenía `marshmallow 4.3.1` pero los requisitos piden `<4` (Docker instalaría la 3.26.2) | Entorno alineado; las pruebas pasan con las versiones declaradas (se comprobó también en un entorno aparte) | `test_dependencies.py` |
+| **S4 · Dependencias sin fijar ni acotar** (instalaciones no reproducibles) | `requirements-lock.txt` (28 paquetes, con rueda para Python 3.12/Linux), cotas superiores, Dependabot | `test_dependencies.py` |
+| **S5 · Paquetes declarados sin uso** (`marshmallow` en weather y forecast; `PyJWT`/`requests`/`tzdata` repetidos) | Eliminados; cada servicio se instaló solo con lo suyo y arranca | `test_every_declared_package_is_used…` |
+| **S6 · Sin `.dockerignore`** | Creado: sin `.git`, `.env`, datos locales ni pruebas en las imágenes | `test_dockerignore…` |
+| **S7 · `setuptools 65.5` con 4 avisos conocidos** (herramienta de instalación del entorno) | Actualizado; `pip-audit`: sin vulnerabilidades conocidas | — |
+
+Pendiente (decisión de producto, no se hizo): verificación en dos pasos para administradores, recuperación de contraseña,
+cabecera `script-src` estricta (requiere compilar Tailwind y alojar las fuentes) y reducir la vida del token de acceso.
 
 ## 5. Observaciones (no son defectos) y riesgos aceptados
 
@@ -138,9 +157,9 @@ abierto/cerrado o de responsabilidad única, **sin cambiar el comportamiento** (
 ## 7. Cómo reproducirlo
 
 ```bash
-python scripts/dev.py up --mail file          # sistema completo (otra terminal); la QA lee los códigos de .mail/
-python scripts/run_tests.py                    # revisión de secretos + 634 pruebas unitarias y de integración
-cd qa && python -m pytest -q                   # 165 pruebas de QA de extremo a extremo
+python scripts/dev.py up --mail file --no-rate-limit   # sistema completo (otra terminal); la QA lee los códigos de .mail/
+python scripts/run_tests.py                    # revisión de secretos + 714 pruebas unitarias y de integración
+cd qa && python -m pytest -q                   # 175 pruebas de QA de extremo a extremo
 ```
 
 Las pruebas de administración crean una **cuenta administradora temporal** (registro + código del correo + promoción en la base) y la desactivan al terminar; si prefieres una existente, define `QA_ADMIN_EMAIL` y `QA_ADMIN_PASSWORD`. Las pruebas de opiniones crean datos reales en la base de desarrollo y los eliminan al terminar.

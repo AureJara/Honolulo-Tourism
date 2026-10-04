@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import tempfile
+import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,22 +71,38 @@ def make_reading(when=None, temp=26.4, code=2, is_day=True, **kw) -> Reading:
     return Reading(**values)
 
 
+def _start_embedded(data_dir: Path, attempts: int = 3):
+    """Arranca el PostgreSQL desechable de las pruebas, con reintentos.
+
+    Falla de forma intermitente si la suite anterior aún lo está apagando (el cierre tarda unos segundos) o si
+    el directorio quedó dañado (p. ej. limpieza de %TEMP% en Windows). Ojo con una trampa de ``pgserver``: un arranque
+    fallido deja una instancia a medias en su caché y las llamadas siguientes la devuelven sin reintentar (luego
+    ``get_uri()`` falla con un ``AssertionError``). Por eso se descarta antes de cada reintento.
+    """
+    import pgserver
+    from pgserver.postgres_server import PostgresServer
+
+    last_error: Exception | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            return pgserver.get_server(data_dir, cleanup_mode="stop")
+        except Exception as exc:                  # noqa: BLE001
+            last_error = exc
+            PostgresServer._instances.pop(data_dir.resolve(), None)
+            if attempt == 2:                      # dos fallos seguidos: se recrea desde cero (es solo un servidor desechable)
+                shutil.rmtree(data_dir, ignore_errors=True)
+            time.sleep(3)
+    assert last_error is not None
+    raise last_error
+
+
 def _server_url() -> str:
     global _embedded
     env = os.getenv("TEST_DATABASE_URL")
     if env:
         return env
-    import pgserver  # import diferido: solo se necesita en desarrollo
-
     if _embedded is None:
-        data_dir = Path(tempfile.gettempdir()) / "honolulo_pg_tests"
-        try:
-            _embedded = pgserver.get_server(data_dir, cleanup_mode="stop")
-        except Exception:                      # noqa: BLE001
-            # El directorio temporal puede quedar dañado (p. ej. limpieza de %TEMP% en Windows): es solo
-            # un servidor desechable de pruebas, así que se recrea desde cero.
-            shutil.rmtree(data_dir, ignore_errors=True)
-            _embedded = pgserver.get_server(data_dir, cleanup_mode="stop")
+        _embedded = _start_embedded(Path(tempfile.gettempdir()) / "honolulo_pg_tests")
     return _embedded.get_uri()
 
 

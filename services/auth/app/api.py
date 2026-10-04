@@ -9,15 +9,17 @@ from sqlalchemy.exc import IntegrityError
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from honolulo_common.errors import ApiError
+from honolulo_common.pagination import page_args
 from honolulo_common.security import auth_required
 from honolulo_common.timeutil import as_utc, utcnow
 
-from . import mailer, verification
+from . import audit, mailer, verification
 from .emails import canonical_email, normalize_email
 from .extensions import db
 from .models import User
 from .names import clean_person_name
 from .schemas import (LoginSchema, RegisterSchema, ResendSchema, TokenSchema, VerifyEmailSchema, load_json)
+from .audit import Event
 from .tokens import issue_tokens, public_tokens, revoke_refresh_token, rotate_refresh_token
 
 log = logging.getLogger(__name__)
@@ -93,6 +95,7 @@ def register():
         db.session.rollback()
         raise ApiError(409, "EMAIL_TAKEN", "Ya existe una cuenta con ese correo.") from exc
     code = verification.issue_code(user)
+    audit.record(Event.REGISTERED, user=user)
     db.session.commit()
     if not _send_code(user, code):
         raise _delivery_failed()
@@ -105,10 +108,15 @@ def verify_email():
     invalid = ApiError(400, "INVALID_CODE", "Código incorrecto o vencido. Solicita uno nuevo si hace falta.")
     user = _find_by_email(data["email"])
     if user is None or user.email_verified_at is not None or not user.is_active:
+        audit.record(Event.VERIFY_FAILED, user=user, email=data["email"], reason="no_pending_account")
+        db.session.commit()
         raise invalid
     if not verification.check_code(user, data["code"]):
+        audit.record(Event.VERIFY_FAILED, user=user, reason="wrong_or_expired_code")
+        db.session.commit()
         raise invalid
     user.last_login_at = utcnow()
+    audit.record(Event.EMAIL_VERIFIED, user=user)
     tokens = issue_tokens(user, user_agent=request.headers.get("User-Agent"))
     db.session.commit()
     return jsonify({**public_tokens(tokens), "user": user_json(user)})
@@ -121,6 +129,7 @@ def resend_code():
     user = _find_by_email(data["email"])
     if user is not None and user.email_verified_at is None and user.is_active:
         code = verification.issue_code(user)
+        audit.record(Event.CODE_RESENT, user=user, sent=code is not None)
         db.session.commit()
         if not _send_code(user, code):
             log.error("No se pudo reenviar el código de confirmación")
@@ -136,23 +145,32 @@ def login():
 
     if user is not None and user.locked_until and as_utc(user.locked_until) > now:
         wait = int((as_utc(user.locked_until) - now).total_seconds())
+        audit.record(Event.LOGIN_BLOCKED, user=user, wait_s=max(wait, 1))
+        db.session.commit()
         raise ApiError(429, "ACCOUNT_LOCKED",
                        "Demasiados intentos fallidos. Inténtalo de nuevo más tarde.",
                        headers={"Retry-After": str(max(wait, 1))})
 
     valid = check_password_hash(user.password_hash if user else _DUMMY_HASH, data["password"])
     if user is None or not valid or not user.is_active:
+        locked_now = False
         if user is not None and user.is_active:
             user.failed_attempts += 1
             if user.failed_attempts >= cfg["MAX_FAILED_ATTEMPTS"]:
                 user.locked_until = now + timedelta(minutes=cfg["LOCKOUT_MINUTES"])
                 user.failed_attempts = 0
-            db.session.commit()
+                locked_now = True
+        audit.record(Event.LOGIN_FAILED, user=user, email=data["email"],
+                     reason="inactive_account" if user is not None and not user.is_active else "bad_credentials")
+        if locked_now:
+            audit.record(Event.ACCOUNT_LOCKED, user=user, minutes=cfg["LOCKOUT_MINUTES"])
+        db.session.commit()
         raise ApiError(401, "INVALID_CREDENTIALS", "Correo o contraseña incorrectos.")
 
     if user.email_verified_at is None:
         # Contraseña correcta pero correo sin confirmar: se envía un código nuevo (respetando los límites).
         code = verification.issue_code(user)
+        audit.record(Event.LOGIN_UNVERIFIED, user=user)
         db.session.commit()
         _send_code(user, code)
         raise ApiError(403, "EMAIL_NOT_VERIFIED", "Confirma tu correo con el código que te enviamos.",
@@ -161,6 +179,7 @@ def login():
     user.failed_attempts = 0
     user.locked_until = None
     user.last_login_at = now
+    audit.record(Event.LOGIN_SUCCESS, user=user)
     tokens = issue_tokens(user, user_agent=request.headers.get("User-Agent"))
     db.session.commit()
     return jsonify({**public_tokens(tokens), "user": user_json(user)})
@@ -177,7 +196,9 @@ def refresh():
 @bp.post("/logout")
 def logout():
     data = load_json(TokenSchema())
-    revoke_refresh_token(data["refresh_token"])
+    user_id = revoke_refresh_token(data["refresh_token"])
+    if user_id is not None:
+        audit.record(Event.LOGOUT, user_id=user_id)
     db.session.commit()
     return "", 204
 
@@ -189,3 +210,18 @@ def me():
     if user is None or not user.is_active or user.email_verified_at is None:
         raise ApiError(401, "AUTH_REQUIRED", "Se requiere una sesión activa.")
     return jsonify(user_json(user))
+
+
+@bp.get("/admin/audit")
+@auth_required(roles=["admin"])
+def audit_list():
+    """Eventos de seguridad recientes (solo administradores): ``?event=login_failed&limit=50&offset=0``."""
+    limit, offset = page_args(default_limit=50, max_limit=200)
+    event = request.args.get("event") or None
+    if event is not None and event not in {e.value for e in Event}:
+        raise ApiError(422, "VALIDATION_ERROR", "Revisa los parámetros.",
+                       errors=[{"field": "event", "message": "Tipo de evento desconocido."}])
+    items, total = audit.page(limit, offset, event)
+    resp = jsonify({"items": items, "total": total, "events": [e.value for e in Event]})
+    resp.headers["Cache-Control"] = "no-store"
+    return resp

@@ -142,7 +142,7 @@ python scripts/dev.py up                         # ahora los códigos salen por 
 
 La contraseña de aplicación se crea en <https://myaccount.google.com/apppasswords> (requiere verificación en dos pasos) y
 se guarda solo en `.env.local`. La automatización de QA necesita leer los códigos de `.mail/`, así que se ejecuta con
-`python scripts/dev.py up --mail file`.
+`python scripts/dev.py up --mail file --no-rate-limit` (sin límite por IP: la QA hace cientos de registros desde una misma IP).
 
 **Administrador** (modera opiniones y edita descripciones y fotos de los lugares en `/admin/lugares`):
 
@@ -168,9 +168,9 @@ docker compose up --build              # http://localhost:8000
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 634 pruebas: común 79 · auth 118 · weather 30 · forecast 88 · catalog 179 · web 140
-python scripts/dev.py up --mail file   # (otra terminal) el sistema para la QA de extremo a extremo
-cd qa && python -m pytest -q           # 165 pruebas de QA de extremo a extremo contra el sistema corriendo
+python scripts/run_tests.py            # revisión de secretos + 714 pruebas: común 103 · auth 143 · weather 30 · forecast 88 · catalog 179 · web 171
+python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
+cd qa && python -m pytest -q           # 175 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
 
 Las suites usan **PostgreSQL real** (no SQLite): `TEST_DATABASE_URL` si existe, o uno embebido con `pgserver`. Las
@@ -205,7 +205,7 @@ unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[in
   opinión fijada, deja de estar fijada. Además sigue cambiando fotos y descripciones.
 - **Políticas.** `/politica-de-privacidad` (reescrita: opiniones, correo, seguridad, moderación, retención y derechos
   ARCO) y `/politica-de-cookies` (tabla de las 4 cookies reales, todas esenciales; sin analítica ni publicidad), más un
-  aviso informativo y descartable. La versión vigente es **2026-10-03** y se guarda con cada consentimiento. Siguen
+  aviso informativo y descartable. La versión vigente es **2026-10-04** y se guarda con cada consentimiento. Siguen
   siendo textos base: **requieren revisión legal**; y `CONTACT_EMAIL` debe cambiarse por un correo real.
 - **Seguridad.** Ninguna contraseña ni clave en el código (`scripts/check_secrets.py` lo vigila y corre con las pruebas);
   los servicios **no arrancan sin secretos fuertes**; la contraseña del usuario solo existe como hash con sal (nunca en
@@ -213,6 +213,20 @@ unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[in
   el administrador se crea con una contraseña oculta que cumple la misma política; cabeceras `Content-Security-Policy`
   (marcos, `<base>`, formularios), `Permissions-Policy`, `COOP` y HSTS en HTTPS; `COOKIE_SECURE` activo por defecto en
   producción.
+- **Límite de peticiones por IP** (en la web, que es la única puerta de entrada): 10 intentos de ingreso cada 5 min, 10
+  registros cada 30 min, 15 intentos con el código cada 10 min, 5 reenvíos de código cada 10 min, 20 cambios de opiniones
+  cada 10 min y 300 peticiones por minuto en total (los archivos estáticos y las fotos no cuentan). Responde `429` con
+  `Retry-After` (página en español para el navegador y `problem+json` para la API). `X-Forwarded-For` **se ignora** salvo que
+  se declare un proxy de confianza (`TRUSTED_PROXY_HOPS=1`), porque cualquiera podría falsificarlo. Es en memoria (la web
+  usa un solo worker): con varios procesos haría falta un almacén compartido (la clase se cambia sin tocar las reglas).
+- **Auditoría de seguridad** (`auth`): cada registro, confirmación de correo, ingreso correcto o fallido, bloqueo de cuenta,
+  cierre de sesión, token de sesión reutilizado (posible robo) y cambio de rol queda con fecha, IP y solo una pista del
+  correo (`a***@gmail.com`) más una huella con clave; nunca contraseñas ni códigos. Los administradores la ven en
+  `/admin/seguridad` (filtro por tipo de evento) y en la terminal con `flask audit-list`; se conserva 180 días
+  (`flask purge-audit`).
+- **Dependencias:** `requirements-lock.txt` fija las versiones probadas (los Dockerfile instalan con `-c`), no hay paquetes
+  declarados que no se usen (lo vigila una prueba), `.dockerignore` deja fuera secretos y datos locales de las imágenes y
+  Dependabot propone las actualizaciones cada semana. `pip-audit` no encuentra vulnerabilidades conocidas.
 
 ## API
 
@@ -262,6 +276,9 @@ extensión (cada uno tiene pruebas que lo demuestran, `test_extensibility.py` y 
 | Una norma para los comentarios (p. ej. filtro de insultos) o un saneador | función con `@comment_rule` / `@comment_sanitizer` | `services/catalog/app/review_schemas.py` |
 | Un comando de desarrollo | función con `@command("nombre", ...)` | `scripts/dev.py` |
 | Una acción en la ventana de opiniones | entrada en la tabla `ACTIONS` + botón con `data-action` | `services/web/app/static/js/reviews.js` |
+| Una regla de límite de peticiones | `Rule` en `default_rules()` (o `limiter.add(Rule(...))`) | `services/web/app/ratelimit.py` |
+| Otro almacén del límite (p. ej. Redis, con varios procesos) | clase con el método `hit(clave, límite, ventana)` | `services/web/app/ratelimit.py` |
+| Un tipo de evento de seguridad | miembro nuevo de `Event` y una llamada `audit.record(...)` | `services/auth/app/audit.py` |
 | Un patrón de secreto a vigilar | entrada en `RULES` | `scripts/check_secrets.py` |
 | Otro proveedor del clima | clase que cumpla `WeatherProvider` + `@register_provider("nombre")`, y `WEATHER_PROVIDER=nombre` (con `WEATHER_PROVIDER_MODULES=mi.modulo` si no está incluido); `weather` y `forecast` no cambian | `libs/honolulo_common/honolulo_common/weather_provider.py` (interfaz y registro), `openmeteo.py` (ejemplo) |
 
@@ -281,6 +298,12 @@ en la web, `reviews_api.py` y `admin_reviews.py` separados de la pasarela del cl
 - **Tailwind por CDN** y fuentes de Google, como en el diseño; para producción conviene compilar y autoalojar.
 - **Política de privacidad**: texto base que requiere revisión legal.
 - Sin limitación de intentos por IP en el login (sí bloqueo de cuenta tras 5 fallos): usar un *rate limiter* en el proxy.
+- **Límite por IP y auditoría:** la IP que ve `auth` es la que le reenvía la web (`X-Client-IP`); si se publica detrás de un
+  proxy hay que declararlo (`TRUSTED_PROXY_HOPS`) o todas las personas parecerán la misma IP. Los eventos de seguridad
+  guardan la IP (dato personal): la política de privacidad lo dice y fija 180 días.
+- **Dependencias:** el lock se generó con Python 3.11 y se comprobó que cada versión fijada tiene rueda para Python 3.12 en
+  Linux (la imagen de Docker), pero las imágenes no se construyeron aquí. Para actualizar: `python scripts/freeze_lock.py`
+  y correr las pruebas.
 - **El envío real de correo se probó contra un servidor SMTP local de pruebas**, no contra Gmail (sin credenciales en el
   entorno de desarrollo): ejecuta `dev.py test-mail` con tu cuenta antes de depender de él. El envío es síncrono.
 - Las personas que ya tenían cuenta aceptaron una versión anterior de la política; el sistema aún no les pide
@@ -299,5 +322,6 @@ infra/postgres/init/         crea una base y un rol por servicio (Docker)
 scripts/dev.py               entorno local sin Docker (+ setup-mail, test-mail, create-admin, set-role)
 scripts/devenv.py            lee y genera .env.local (secretos aleatorios; fuera de git)
 scripts/check_secrets.py     falla si hay contraseñas o claves escritas en el código
+scripts/freeze_lock.py       regenera requirements-lock.txt (versiones exactas probadas)
 scripts/run_tests.py         revisión de secretos + todas las suites
 ```

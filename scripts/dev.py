@@ -2,7 +2,7 @@
 """Entorno de desarrollo SIN Docker: PostgreSQL embebido (pgserver) + los 5 servicios.
 
     python scripts/dev.py up                       # base de datos, migraciones y servicios
-    python scripts/dev.py up --mail file           # fuerza el correo a archivos (.mail/); lo usa la QA automática
+    python scripts/dev.py up --mail file --no-rate-limit   # modo de la QA automática (correo en .mail/, sin límite por IP)
     python scripts/dev.py setup-mail               # guarda tu Gmail + contraseña de aplicación (la escribes tú)
     python scripts/dev.py test-mail tu@gmail.com   # envía un correo de prueba con esa configuración
     python scripts/dev.py create-admin             # crea un administrador (pide la contraseña sin mostrarla)
@@ -204,6 +204,8 @@ def up(env: dict) -> None:
         for service, port in PORTS.items():
             ok = wait_healthy(service, port)
             print(f"  {'✔' if ok else '✘'} {service:<9} http://127.0.0.1:{port}")
+        if env.get("RATE_LIMIT_ENABLED") == "0":
+            print("\nAVISO: límite de peticiones por IP DESACTIVADO (--no-rate-limit): úsalo solo para la QA automática.")
         print(f"\n{mail_banner(env)}")
         print(f"Abre http://127.0.0.1:{PORTS['web']}  (logs en {LOG_DIR}). Ctrl+C para detener.")
         while all(p.poll() is None for p in procs):
@@ -271,10 +273,15 @@ def command(name: str, help: str, *, needs_database: bool = False, configure=Non
 def _configure_up(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--mail", choices=["auto", "file"], default="auto",
                         help="auto: SMTP si está configurado; file: deja los correos en .mail/")
+    parser.add_argument("--no-rate-limit", action="store_true",
+                        help="desactiva el límite de peticiones por IP (solo para la QA automática, que hace cientos de "
+                             "registros desde una misma IP)")
 
 
 @command("up", "migra la base de datos y levanta los servicios", needs_database=True, configure=_configure_up)
 def _cmd_up(args, env) -> None:
+    if args.no_rate_limit:
+        env["RATE_LIMIT_ENABLED"] = "0"
     migrate(env)
     up(env)
 

@@ -9,7 +9,7 @@ from honolulo_common.app_setup import (configure_logging, init_request_id, regis
 from honolulo_common.errors import register_error_handlers
 from honolulo_common.timeutil import utcnow
 
-from . import mailer
+from . import audit, mailer
 from .config import Config
 from .extensions import db, migrate
 
@@ -60,6 +60,10 @@ def create_app(overrides: dict | None = None) -> Flask:
                         last_name=last_name,
                         password_hash=generate_password_hash(password, method=app.config["PASSWORD_HASH_METHOD"]))
             db.session.add(user)
+            db.session.flush()
+            audit.record(audit.Event.ADMIN_CREATED, user=user, source="cli")
+        elif user.role != "admin":
+            audit.record(audit.Event.ROLE_CHANGED, user=user, old=user.role, new="admin", source="cli")
         user.role = "admin"
         user.email_verified_at = user.email_verified_at or utcnow()
         db.session.commit()
@@ -100,8 +104,27 @@ def create_app(overrides: dict | None = None) -> Flask:
             db.select(User).where(User.email_canonical == canonical_email(email))).scalar_one_or_none()
         if user is None:
             raise click.ClickException("Usuario no encontrado")
+        if user.role != role:
+            audit.record(audit.Event.ROLE_CHANGED, user=user, old=user.role, new=role, source="cli")
         user.role = role
         db.session.commit()
         click.echo(f"{user.email} → {role}")
+
+    @app.cli.command("purge-audit")
+    @click.option("--days", type=int, default=None, help="por defecto AUDIT_RETENTION_DAYS (180)")
+    def purge_audit(days):
+        """Borra los eventos de seguridad más antiguos que el plazo de retención."""
+        days = days if days is not None else app.config["AUDIT_RETENTION_DAYS"]
+        click.echo(f"Eventos borrados (anteriores a {days} días): {audit.purge_older_than(days)}")
+
+    @app.cli.command("audit-list")
+    @click.option("--limit", type=click.IntRange(1, 200), default=20)
+    @click.option("--event", default=None)
+    def audit_list_cmd(limit, event):
+        """Muestra los últimos eventos de seguridad."""
+        items, total = audit.page(limit, 0, event)
+        click.echo(f"{total} eventos; los {len(items)} más recientes:")
+        for item in items:
+            click.echo(f"  {item['occurred_at'][:19]}  {item['event']:<17} {item['ip'] or '-':<15} {item['email_hint'] or '-'}")
 
     return app

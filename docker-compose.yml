@@ -21,6 +21,8 @@ services:
       <<: *base-env
       WEB_SECRET_KEY: ${WEB_SECRET_KEY:?defina WEB_SECRET_KEY}
       COOKIE_SECURE: ${COOKIE_SECURE:-0}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-1}
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}     # 1 si hay un proxy de confianza delante (Nginx, Cloudflare…)
       AUTH_SERVICE_URL: http://auth:5001
       WEATHER_SERVICE_URL: http://weather:5002
       FORECAST_SERVICE_URL: http://forecast:5003

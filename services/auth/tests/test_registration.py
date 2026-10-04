@@ -185,7 +185,7 @@ def test_consent_and_policy_version_are_recorded(app, client):
     register(client)
     with app.app_context():
         user = db.session.execute(db.select(User)).scalar_one()
-        assert user.privacy_accepted_at is not None and user.privacy_policy_version == "2026-10-03"
+        assert user.privacy_accepted_at is not None and user.privacy_policy_version == "2026-10-04"
 
 
 # --------------------------------------------- Escenario 8: nombre y apellido reales

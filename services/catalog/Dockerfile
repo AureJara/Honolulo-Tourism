@@ -4,8 +4,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_NO_CACHE_DIR=1
 WORKDIR /srv
 
 COPY libs/honolulo_common /opt/honolulo_common
+COPY requirements-lock.txt /tmp/requirements-lock.txt
 COPY services/catalog/requirements.txt .
-RUN pip install -r requirements.txt /opt/honolulo_common
+RUN pip install -c /tmp/requirements-lock.txt -r requirements.txt /opt/honolulo_common
 
 COPY services/catalog/ .
 # Las fotos viven en /media (volumen). El proceso corre sin privilegios.

@@ -15,7 +15,7 @@ ADMIN = {**USER, "id": "a1", "email": "admin@example.com", "first_name": "Admin"
 @pytest.fixture()
 def app():
     upstream.coordinator._recent.clear()
-    return create_app({"TESTING": True, "SECRET_KEY": "test-web-secret-test-web-secret-123", "AUTH_SERVICE_URL": AUTH, "WEATHER_SERVICE_URL": WEATHER,
+    return create_app({"TESTING": True, "SECRET_KEY": "test-web-secret-test-web-secret-123", "RATE_LIMIT_ENABLED": False, "AUTH_SERVICE_URL": AUTH, "WEATHER_SERVICE_URL": WEATHER,
                        "FORECAST_SERVICE_URL": FORECAST, "CATALOG_SERVICE_URL": CATALOG,
                        "UPSTREAM_TIMEOUT_S": 2})
 

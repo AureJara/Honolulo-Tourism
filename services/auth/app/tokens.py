@@ -14,6 +14,7 @@ from honolulo_common.errors import ApiError
 from honolulo_common.security import JWT_ALGORITHM
 from honolulo_common.timeutil import as_utc, utcnow
 
+from . import audit
 from .extensions import db
 from .models import RefreshToken, User
 
@@ -74,6 +75,7 @@ def rotate_refresh_token(raw: str, user_agent: str | None) -> tuple[User, dict]:
             .where(RefreshToken.family_id == row.family_id, RefreshToken.revoked_at.is_(None))
             .values(revoked_at=now)
         )
+        audit.record(audit.Event.REFRESH_REUSE, user_id=row.user_id, family=str(row.family_id)[:8])
         db.session.commit()
         raise invalid
     if as_utc(row.expires_at) <= now:
@@ -88,12 +90,15 @@ def rotate_refresh_token(raw: str, user_agent: str | None) -> tuple[User, dict]:
     return user, tokens
 
 
-def revoke_refresh_token(raw: str) -> None:
+def revoke_refresh_token(raw: str) -> uuid.UUID | None:
+    """Revoca el token; devuelve la cuenta a la que pertenecía (``None`` si no existía o ya estaba revocado)."""
     row = db.session.execute(
         db.select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw))
     ).scalar_one_or_none()
     if row is not None and row.revoked_at is None:
         row.revoked_at = utcnow()
+        return row.user_id
+    return None
 
 
 def public_tokens(tokens: dict) -> dict:

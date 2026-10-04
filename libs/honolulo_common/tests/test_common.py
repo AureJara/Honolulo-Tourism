@@ -169,3 +169,29 @@ def test_internal_token(app):
     assert client.get("/internal").status_code == 403
     assert client.get("/internal", headers={"X-Internal-Token": "bad"}).status_code == 403
     assert client.get("/internal", headers={"X-Internal-Token": "internal-token"}).status_code == 200
+
+
+# ------------------------------------------------------------------ paginación común
+def test_page_args_defaults_and_limits():
+    from flask import Flask
+    from honolulo_common.errors import ApiError
+    from honolulo_common.pagination import page_args
+
+    app = Flask(__name__)
+    with app.test_request_context("/?"):
+        assert page_args(default_limit=10, max_limit=50) == (10, 0)
+    with app.test_request_context("/?limit=50&offset=100"):
+        assert page_args(default_limit=10, max_limit=50) == (50, 100)
+    for query in ("limit=0", "limit=51", "limit=abc", "offset=-1", "offset=x", "limit=1.5", "offset=100001"):
+        with app.test_request_context(f"/?{query}"):
+            try:
+                page_args(default_limit=10, max_limit=50)
+            except ApiError as exc:
+                assert exc.status == 422 and exc.errors and exc.errors[0]["field"] in ("limit", "offset")
+            else:
+                raise AssertionError(f"{query} debía rechazarse")
+    with app.test_request_context("/?limit=0&offset=-1"):
+        try:
+            page_args()
+        except ApiError as exc:
+            assert {e["field"] for e in exc.errors} == {"limit", "offset"}              # los dos errores juntos

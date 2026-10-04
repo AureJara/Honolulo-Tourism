@@ -29,8 +29,8 @@ class UpstreamUnavailable(Exception):
 class SessionState:
     """Tokens de la petición en curso. Es seguro usarlo desde varios hilos."""
 
-    def __init__(self, cfg, request_id: str, access: str | None, refresh: str | None) -> None:
-        self.cfg, self.request_id = cfg, request_id
+    def __init__(self, cfg, request_id: str, access: str | None, refresh: str | None, client_ip: str = "") -> None:
+        self.cfg, self.request_id, self.client_ip = cfg, request_id, client_ip
         self.access, self.refresh = access, refresh
         self.rotated: dict | None = None     # tokens nuevos que hay que enviar al navegador
         self.cleared = False                 # la sesión dejó de ser válida
@@ -42,7 +42,7 @@ class _RefreshCoordinator:
         self._lock = threading.Lock()
         self._recent: dict[str, tuple[float, dict]] = {}
 
-    def refresh(self, refresh_token: str, cfg) -> dict | None:
+    def refresh(self, refresh_token: str, cfg, client_ip: str = "") -> dict | None:
         with self._lock:
             now = time.monotonic()
             self._recent = {k: v for k, v in self._recent.items() if v[0] > now}
@@ -50,7 +50,8 @@ class _RefreshCoordinator:
                 return self._recent[refresh_token][1]
             try:
                 resp = requests.post(f"{cfg['AUTH_SERVICE_URL'].rstrip('/')}/api/v1/auth/refresh",
-                                     json={"refresh_token": refresh_token}, timeout=cfg["UPSTREAM_TIMEOUT_S"])
+                                     json={"refresh_token": refresh_token}, headers=_client_headers(client_ip),
+                                     timeout=cfg["UPSTREAM_TIMEOUT_S"])
             except requests.RequestException:
                 raise UpstreamUnavailable("auth") from None
             if resp.status_code != 200:
@@ -63,10 +64,15 @@ class _RefreshCoordinator:
 coordinator = _RefreshCoordinator()
 
 
+def _client_headers(client_ip: str) -> dict:
+    """IP de la persona que hizo la petición: los servicios la guardan en la auditoría de seguridad."""
+    return {"X-Client-IP": client_ip} if client_ip else {}
+
+
 def init_state() -> None:
     cfg = current_app.config
     g.state = SessionState(cfg, getattr(g, "request_id", ""), request.cookies.get(cfg["ACCESS_COOKIE"]),
-                           request.cookies.get(cfg["REFRESH_COOKIE"]))
+                           request.cookies.get(cfg["REFRESH_COOKIE"]), request.remote_addr or "")
 
 
 def _refresh_session(state: SessionState, failed_access: str | None) -> bool:
@@ -77,7 +83,7 @@ def _refresh_session(state: SessionState, failed_access: str | None) -> bool:
         if not state.refresh:
             state.cleared = True
             return False
-        tokens = coordinator.refresh(state.refresh, state.cfg)
+        tokens = coordinator.refresh(state.refresh, state.cfg, state.client_ip)
         if tokens is None:
             state.access = state.refresh = None
             state.cleared = True
@@ -97,7 +103,7 @@ def _request(cfg, service: str, method: str, path: str, *, params=None, json=Non
 
 def _send(state: SessionState, service: str, method: str, path: str, *, params=None, json=None,
           data=None, files=None):
-    headers = {"X-Request-ID": state.request_id}
+    headers = {"X-Request-ID": state.request_id, **_client_headers(state.client_ip)}
     with state.lock:
         access = state.access
     if access:
@@ -122,5 +128,5 @@ def downstream(state: SessionState, service: str, method: str, path: str, *, par
 def anonymous(service: str, method: str, path: str, *, json=None, headers=None, params=None):
     """Llamadas sin sesión (login, registro, lectura pública del catálogo y fotos)."""
     cfg = current_app.config
-    merged = {"X-Request-ID": getattr(g, "request_id", ""), **(headers or {})}
+    merged = {"X-Request-ID": getattr(g, "request_id", ""), **_client_headers(request.remote_addr or ""), **(headers or {})}
     return _request(cfg, service, method, path, params=params, json=json, headers=merged)

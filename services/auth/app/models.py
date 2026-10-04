@@ -4,9 +4,12 @@ import uuid
 from datetime import datetime
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .extensions import db
+
+JSON_TYPE = sa.JSON().with_variant(JSONB(), "postgresql")
 
 
 class User(db.Model):
@@ -69,3 +72,24 @@ class RefreshToken(db.Model):
     user_agent: Mapped[str | None] = mapped_column(sa.String(200))
     created_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+
+
+class AuditEvent(db.Model):
+    """Evento de seguridad (ver ``audit.py``). Sin contraseñas, códigos ni tokens; del correo solo una pista y una huella."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        sa.Index("ix_audit_events_time", "occurred_at"),
+        sa.Index("ix_audit_events_event_time", "event", "occurred_at"),
+        sa.Index("ix_audit_events_user", "user_id"),
+    )
+
+    id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
+    occurred_at: Mapped[datetime] = mapped_column(sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+    event: Mapped[str] = mapped_column(sa.String(40), nullable=False)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(sa.Uuid, sa.ForeignKey("users.id", ondelete="SET NULL"))
+    email_hint: Mapped[str | None] = mapped_column(sa.String(120))
+    email_hash: Mapped[str | None] = mapped_column(sa.String(16))
+    ip: Mapped[str | None] = mapped_column(sa.String(45))
+    detail: Mapped[dict | None] = mapped_column(JSON_TYPE)
+

@@ -23,7 +23,10 @@ class Config:
     MAX_CONTENT_LENGTH = 16 * 1024
 
     # Política de privacidad vigente que el usuario debe aceptar al registrarse (Escenario 7).
-    PRIVACY_POLICY_VERSION = os.getenv("PRIVACY_POLICY_VERSION", "2026-10-03")
+    PRIVACY_POLICY_VERSION = os.getenv("PRIVACY_POLICY_VERSION", "2026-10-04")
+
+    # Los eventos de seguridad (inicios de sesión, fallos, bloqueos…) se conservan este tiempo (`flask purge-audit`).
+    AUDIT_RETENTION_DAYS = int(os.getenv("AUDIT_RETENTION_DAYS", "180"))
 
     # Confirmación del correo con código de 6 dígitos (Escenario 7).
     VERIFICATION_CODE_TTL_MIN = int(os.getenv("VERIFICATION_CODE_TTL_MIN", "10"))

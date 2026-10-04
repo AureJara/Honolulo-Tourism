@@ -219,3 +219,39 @@ def test_start_postgres_does_not_wait_when_the_server_starts_normally(monkeypatc
     monkeypatch.setattr(pgserver, "get_server", lambda path, cleanup_mode: fake)
     monkeypatch.setattr(dev, "wait_for_recovery", lambda: pytest.fail("no debía esperar"))
     assert dev.start_postgres() == (fake, "postgresql://x")
+
+
+# ----------------------------- PostgreSQL desechable de las pruebas: reintenta y no deja instancias a medias
+def test_the_test_database_retries_and_drops_the_half_started_instance(monkeypatch, tmp_path):
+    import pgserver
+    from pgserver.postgres_server import PostgresServer
+    from honolulo_common import testing
+
+    calls, data_dir = [], tmp_path / "pg"
+    ok = type("S", (), {"get_uri": lambda self: "postgresql://x"})()
+
+    def get_server(path, cleanup_mode):
+        calls.append(len(calls) + 1)
+        PostgresServer._instances[path.resolve()] = "instancia a medias"        # lo que deja un arranque fallido
+        if len(calls) < 3:
+            raise subprocess.TimeoutExpired("pg_ctl", 10)
+        PostgresServer._instances.pop(path.resolve(), None)
+        return ok
+
+    monkeypatch.setattr(pgserver, "get_server", get_server)
+    monkeypatch.setattr(testing.time, "sleep", lambda s: None)
+    data_dir.mkdir()
+    (data_dir / "pg_notify_perdido").write_text("dañado")
+    assert testing._start_embedded(data_dir) is ok and len(calls) == 3
+    assert data_dir.resolve() not in PostgresServer._instances                  # no quedó nada en la caché de pgserver
+    assert not (data_dir / "pg_notify_perdido").exists()                         # tras dos fallos se recreó el directorio
+
+
+def test_the_test_database_gives_up_with_the_original_error_after_three_attempts(monkeypatch, tmp_path):
+    import pgserver
+    from honolulo_common import testing
+
+    monkeypatch.setattr(pgserver, "get_server", lambda path, cleanup_mode: (_ for _ in ()).throw(RuntimeError("no arranca")))
+    monkeypatch.setattr(testing.time, "sleep", lambda s: None)
+    with pytest.raises(RuntimeError, match="no arranca"):
+        testing._start_embedded(tmp_path / "pg")

@@ -27,7 +27,7 @@ def test_privacy_policy_page_is_public_and_versioned(client):
     resp = client.get("/politica-de-privacidad")
     html = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    for expected in ("Política de privacidad", "Versión 2026-10-03", "Ley N.° 29733", "revisado por asesoría legal"):
+    for expected in ("Política de privacidad", "Versión 2026-10-04", "Ley N.° 29733", "revisado por asesoría legal"):
         assert expected in html
 
 
@@ -173,3 +173,20 @@ def test_footer_text_meets_contrast_and_calendar_padding_has_no_opacity(client):
     assert "text-outline" not in html
     js = open("app/static/js/app.js", encoding="utf-8").read()
     assert "opacity-30" not in js
+
+
+# ------------------------------------------------- la IP real viaja a `auth` para la auditoría de seguridad
+def test_the_client_ip_is_forwarded_to_auth_and_cannot_be_spoofed(client, mocked):
+    mocked.post(f"{AUTH}/api/v1/auth/login", status=401, json={"code": "INVALID_CREDENTIALS", "detail": "x"})
+    token = csrf_from(client, "/ingresar")
+    client.post("/ingresar", data={"email": "a@b.co", "password": "x", "csrf_token": token},
+                environ_overrides={"REMOTE_ADDR": "198.51.100.23"}, headers={"X-Client-IP": "6.6.6.6"})
+    sent = [c.request for c in mocked.calls if c.request.url.endswith("/auth/login")][0]
+    assert sent.headers["X-Client-IP"] == "198.51.100.23"              # la de la conexión, nunca la que diga el navegador
+
+
+def test_the_client_ip_is_also_sent_on_session_calls_and_token_refresh(client, mocked):
+    mocked.get(f"{AUTH}/api/v1/auth/me", json=USER)
+    login_cookies(client)
+    client.get("/", environ_overrides={"REMOTE_ADDR": "198.51.100.24"})
+    assert mocked.calls[-1].request.headers["X-Client-IP"] == "198.51.100.24"

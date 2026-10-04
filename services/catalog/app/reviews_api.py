@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import uuid
 
-from flask import Blueprint, current_app, g, jsonify, request
+from flask import Blueprint, current_app, g, jsonify
 
-from honolulo_common.errors import ApiError
+from honolulo_common.pagination import page_args
 
 from . import reviews, service
 from .permissions import admin_only, signed_in
@@ -20,30 +20,11 @@ from .schemas import load_body
 bp = Blueprint("reviews", __name__)
 
 
-def _page_args() -> tuple[int, int]:
-    """``limit`` (1–50) y ``offset`` (≥ 0) de la lista de opiniones."""
-    errors = []
-    default = current_app.config["REVIEWS_PAGE_SIZE"]
-    values = {}
-    for key, low, high, fallback in (("limit", 1, 50, default), ("offset", 0, 100_000, 0)):
-        raw = request.args.get(key)
-        try:
-            number = fallback if raw is None else int(raw)
-        except ValueError:
-            number = None
-        if number is None or not low <= number <= high:
-            errors.append({"field": key, "message": f"Debe ser un entero entre {low} y {high}."})
-        values[key] = number
-    if errors:
-        raise ApiError(422, "VALIDATION_ERROR", "Revisa los parámetros.", errors=errors)
-    return values["limit"], values["offset"]
-
-
 @bp.get("/api/v1/places/<slug>/reviews")
 def list_reviews(slug: str):
     """Opiniones públicas del lugar: las fijadas primero. Nunca se cachean (una eliminación debe verse al instante)."""
     place = service.get_public(slug)
-    return no_store(jsonify(reviews.reviews_page(place, *_page_args())))
+    return no_store(jsonify(reviews.reviews_page(place, *page_args(default_limit=current_app.config["REVIEWS_PAGE_SIZE"], max_limit=50))))
 
 
 @bp.get("/api/v1/places/<slug>/reviews/mine")

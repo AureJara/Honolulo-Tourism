@@ -14,3 +14,5 @@ __pycache__/
 .media/
 .dev-credentials.local
 spec.borrador-previo.md
+build/
+dist/

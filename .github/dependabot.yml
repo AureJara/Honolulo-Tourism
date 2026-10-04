@@ -1,0 +1,38 @@
+# Dependabot abre solicitudes de cambio (pull requests) con las actualizaciones de dependencias.
+# Cada una debe pasar las pruebas (python scripts/run_tests.py) antes de aceptarse.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: "/"                      # requirements-lock.txt y requirements-dev.txt
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-menores:
+        update-types: [minor, patch]
+    labels: [dependencias]
+  - package-ecosystem: docker
+    directory: "/services/auth"
+    schedule:
+      interval: weekly
+    labels: [dependencias]
+  - package-ecosystem: docker
+    directory: "/services/weather"
+    schedule:
+      interval: weekly
+    labels: [dependencias]
+  - package-ecosystem: docker
+    directory: "/services/forecast"
+    schedule:
+      interval: weekly
+    labels: [dependencias]
+  - package-ecosystem: docker
+    directory: "/services/catalog"
+    schedule:
+      interval: weekly
+    labels: [dependencias]
+  - package-ecosystem: docker
+    directory: "/services/web"
+    schedule:
+      interval: weekly
+    labels: [dependencias]

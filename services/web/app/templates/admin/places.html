@@ -9,9 +9,14 @@
         <h1 class="font-headline text-3xl font-bold tracking-tight">Lugares y fotos</h1>
         <p class="text-sm text-on-surface-variant mt-1">Edita las descripciones y las fotos que ven los visitantes.</p>
       </div>
-      <a href="{{ url_for('admin.place_new') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-sm font-headline font-semibold transition-colors">
-        <span class="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>Nuevo lugar
-      </a>
+      <div class="flex flex-wrap items-center gap-2">
+        <a href="{{ url_for('admin_security.security_activity') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-outline-variant/60 hover:bg-surface-container-high text-sm font-headline font-semibold transition-colors">
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">shield</span>Actividad de seguridad
+        </a>
+        <a href="{{ url_for('admin.place_new') }}" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary text-sm font-headline font-semibold transition-colors">
+          <span class="material-symbols-outlined text-[18px]" aria-hidden="true">add</span>Nuevo lugar
+        </a>
+      </div>
     </div>
 
     <div class="relative bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm overflow-x-auto">

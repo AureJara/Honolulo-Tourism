@@ -11,6 +11,7 @@ from .pages import _body, current_user
 from .upstream import UpstreamUnavailable, downstream
 
 CATALOG_DOWN = "El catálogo de lugares no está disponible. Inténtalo nuevamente en unos minutos."
+AUTH_DOWN = "El servicio de cuentas no está disponible. Inténtalo nuevamente en unos minutos."
 
 
 def admin_required(view):
@@ -26,11 +27,20 @@ def admin_required(view):
     return wrapper
 
 
-def catalog_call(method: str, path: str, **kwargs):
+def service_call(service: str, down_message: str, method: str, path: str, **kwargs):
+    """Llama a un microservicio con la sesión de quien administra; si no responde, muestra la página de error 503."""
     try:
-        return downstream(g.state, "catalog", method, path, **kwargs)
+        return downstream(g.state, service, method, path, **kwargs)
     except UpstreamUnavailable:
-        abort(503, description=CATALOG_DOWN)
+        abort(503, description=down_message)
+
+
+def catalog_call(method: str, path: str, **kwargs):
+    return service_call("catalog", CATALOG_DOWN, method, path, **kwargs)
+
+
+def auth_call(method: str, path: str, **kwargs):
+    return service_call("auth", AUTH_DOWN, method, path, **kwargs)
 
 
 def error_messages(resp) -> tuple[dict[str, str], str | None]:
