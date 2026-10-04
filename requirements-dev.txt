@@ -18,4 +18,4 @@ Pillow>=10.3,<13
 # Pruebas y PostgreSQL embebido (alternativa a Docker para desarrollo)
 pytest>=8
 responses>=0.25
-pgserver>=0.1
+pgserver>=0.1.4
