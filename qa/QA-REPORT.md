@@ -140,7 +140,7 @@ cabecera `script-src` estricta (requiere compilar Tailwind y alojar las fuentes)
 - Varias cuentas pueden iniciar sesión a la vez; cerrar una no cierra las demás (verificado).
 - **La suite de QA abre unas 2 400 conexiones por ejecución** y en Windows quedan en `TIME_WAIT` unos 2 minutos: dos ejecuciones seguidas pueden agotar los puertos locales (`WinError 10048`) y hacer fallar una prueba al azar (pasa sola). Esperar ~2 min entre corridas completas.
 - **Las opiniones se moderan después de publicarse** (no hay cola previa) y solo se bloquean los enlaces: no hay filtro de insultos.
-- **Una cuenta antigua creada por línea de comandos** (`ejemplo@gmail.com`) conserva una contraseña más corta que el mínimo actual: la política se aplica al registrarse y al crear administradores, no retroactivamente.
+- **La cuenta administradora local tiene una contraseña más corta que el mínimo actual (10 caracteres)**: su dueña la fijó directamente en la base de desarrollo, fuera de los flujos que aplican la política (registro y `create-admin`). La política no es retroactiva. Antes de publicar el sistema hay que cambiarla por una que la cumpla. La cuenta de ejemplo que usaba una clave aún más corta ya se eliminó.
 - Quien ya tenía cuenta aceptó la política anterior; no se le pide aceptar la nueva (queda la versión registrada por cuenta).
 
 ## 6. Lo que NO se probó (y conviene antes de producción)
