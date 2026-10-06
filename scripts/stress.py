@@ -378,6 +378,8 @@ def run_all(settings: Settings) -> None:
 
 # ------------------------------------------------------------------------------------------------ entrada
 def main() -> None:
+    import devenv                                     # mismo directorio: scripts/
+    devenv.run_in_project_venv(sys.argv)              # con el Python del sistema faltan las librerías del proyecto
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")

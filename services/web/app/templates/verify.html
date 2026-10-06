@@ -9,7 +9,11 @@
         <span class="material-symbols-outlined text-[15px]" aria-hidden="true">mark_email_unread</span>Confirmación de correo
       </div>
       <h1 class="font-headline text-3xl font-bold text-on-surface tracking-tight">Ingresa tu código</h1>
+      {% if local_mailbox %}
+      <p class="mt-2 text-sm text-on-surface-variant">Modo de desarrollo: el código de 6 dígitos <strong class="text-on-surface">no se envió</strong> a <strong class="text-on-surface">{{ email_masked }}</strong>; quedó en {{ local_mailbox }}. Vence en 10 minutos.</p>
+      {% else %}
       <p class="mt-2 text-sm text-on-surface-variant">Enviamos un código de 6 dígitos a <strong class="text-on-surface">{{ email_masked }}</strong>. Vence en 10 minutos.</p>
+      {% endif %}
 
       {% if error %}
       <div role="alert" class="mt-5 p-3 rounded-lg bg-error-container text-on-error-container text-sm flex items-start gap-2">

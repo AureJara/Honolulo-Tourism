@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -96,8 +97,12 @@ def local_env(mail_mode: str = "auto") -> dict:
 
 def mail_banner(env: dict) -> str:
     if env["MAIL_BACKEND"] == "smtp":
-        return (f"Correo: ENVÍO REAL por {env.get('SMTP_HOST')} desde {env.get('SMTP_USER')} "
-                "(los códigos llegan al correo del usuario).")
+        banner = (f"Correo: ENVÍO REAL por {env.get('SMTP_HOST')} desde {env.get('SMTP_USER')} "
+                  "(los códigos llegan al correo del usuario).")
+        problem = app_password_problem(env.get("SMTP_PASSWORD", "")) if env.get("SMTP_HOST") == GMAIL_HOST else None
+        if problem:                      # la configuración existe pero Gmail la va a rechazar: mejor saberlo ahora
+            banner += f"\n        ATENCIÓN: {problem}\n        Vuelve a ejecutar: python scripts/dev.py setup-mail"
+        return banner
     return ("Correo: MODO ARCHIVO. Los códigos NO se envían: quedan en .mail/ (solo para desarrollo y QA).\n"
             "        Para enviarlos al correo real del usuario: python scripts/dev.py setup-mail")
 
@@ -121,7 +126,7 @@ def base_env(pg_uri: str, mail_mode: str = "auto") -> dict:
 
 def service_env(env: dict, service: str) -> dict:
     out = dict(env)
-    if service in DBS:
+    if service in DBS and "_SQLA_BASE" in env:      # sin PostgreSQL levantado (p. ej. ``test-mail``) se usa el valor por defecto
         out["DATABASE_URL"] = f"{env['_SQLA_BASE']}/{DBS[service]}"
     return out
 
@@ -223,19 +228,36 @@ def up(env: dict) -> None:
                 p.kill()
 
 
+GMAIL_HOST = "smtp.gmail.com"
+_GMAIL_APP_PASSWORD = re.compile(r"[A-Za-z]{16}")
+
+
+def app_password_problem(password: str) -> str | None:
+    """Una contraseña de aplicación de Google son 16 letras (Google las muestra en 4 grupos de 4). Cualquier otra cosa casi
+    seguro es la contraseña normal de la cuenta: Gmail la rechaza para enviar correo y no debe quedar escrita en un archivo.
+    Solo dice cuántos caracteres tiene; nunca repite lo escrito."""
+    if _GMAIL_APP_PASSWORD.fullmatch(password):
+        return None
+    return (f"Eso no parece una contraseña de aplicación de Google: tiene {len(password)} caracteres y deben ser 16 letras. "
+            "NO uses tu contraseña normal de Google (Gmail la rechaza para enviar correo). Créala en "
+            "https://myaccount.google.com/apppasswords (requiere la verificación en dos pasos).")
+
+
 def setup_mail() -> None:
     """Guarda en .env.local el Gmail y su contraseña de aplicación. La contraseña se escribe aquí, sin mostrarse."""
     import getpass
     print("Configuración del correo que enviará los códigos de confirmación.\n"
-          "Necesitas una contraseña de aplicación de Google (verificación en dos pasos activada):\n"
+          "Necesitas una contraseña de aplicación de Google (16 letras; NO es tu contraseña normal), que se crea con la\n"
+          "verificación en dos pasos activada:\n"
           "  https://myaccount.google.com/apppasswords\n")
     user = input("Correo Gmail remitente: ").strip()
     if "@" not in user or " " in user:
         raise SystemExit("Ese correo no parece válido.")
     password = getpass.getpass("Contraseña de aplicación (no se muestra): ").replace(" ", "")
-    if len(password) < 8:
-        raise SystemExit("La contraseña de aplicación es demasiado corta; no se guardó nada.")
-    devenv.update_env_file({"SMTP_HOST": "smtp.gmail.com", "SMTP_PORT": "587", "SMTP_USER": user,
+    problem = app_password_problem(password)
+    if problem:
+        raise SystemExit(f"{problem}\nNo se guardó nada.")
+    devenv.update_env_file({"SMTP_HOST": GMAIL_HOST, "SMTP_PORT": "587", "SMTP_USER": user,
                             "SMTP_PASSWORD": password, "SMTP_SECURITY": "starttls"})
     print("\nGuardado en .env.local (ignorado por git). Prueba el envío con:\n"
           "  python scripts/dev.py test-mail tu_correo@gmail.com")
@@ -245,7 +267,12 @@ def test_mail(to: str) -> None:
     env = local_env()
     if env["MAIL_BACKEND"] != "smtp":
         raise SystemExit("El correo real no está configurado. Primero ejecuta: python scripts/dev.py setup-mail")
-    flask("auth", env, "mail-test", to)
+    env.setdefault("APP_ENV", "development")
+    env.setdefault("PYTHONUTF8", "1")               # el comando solo envía un correo: no necesita la base de datos
+    try:
+        flask("auth", env, "mail-test", to)
+    except subprocess.CalledProcessError:
+        raise SystemExit(1) from None               # el comando ya explicó el motivo; no hace falta el traceback de Python
 
 
 # ------------------------------------------------------------------- comandos
@@ -331,6 +358,7 @@ def _cmd_set_role(args, env) -> None:
 
 
 def main() -> None:
+    devenv.run_in_project_venv(sys.argv)              # con el Python del sistema faltan las librerías del proyecto
     for stream in (sys.stdout, sys.stderr):          # la consola de Windows puede ser cp1252 al canalizar la salida
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8", errors="replace")

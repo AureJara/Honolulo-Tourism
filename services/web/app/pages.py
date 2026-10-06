@@ -70,6 +70,21 @@ def mask_email(email: str) -> str:
     return f"{local[:1]}{'*' * max(len(local) - 1, 3)}@{domain}" if domain else email
 
 
+def _announce_code(body: dict, sent: str, category: str = "ok") -> None:
+    """Avisa de que se pidió un código de confirmación. ``auth`` informa en ``delivery`` si el correo sale a Internet: si no
+    (desarrollo: el mensaje queda en una carpeta) NO se dice que se envió; se dice dónde quedó y la pantalla del código lo
+    recuerda (``mail_local``). Una versión de ``auth`` que no informe nada se trata como envío normal."""
+    delivery = body.get("delivery") or {}
+    if delivery.get("external", True):
+        session.pop("mail_local", None)
+        flash(sent, category)
+        return
+    where = delivery.get("where") or "el sistema de desarrollo"
+    session["mail_local"] = where
+    flash(f"Modo de desarrollo: el código NO se envió a tu correo, quedó en {where}. "
+          "Para recibirlo por correo configura el envío con: python scripts/dev.py setup-mail", "info")
+
+
 # ----------------------------------------------------------------- acceso
 @bp.route("/ingresar", methods=["GET", "POST"])
 def login():
@@ -92,7 +107,7 @@ def login():
     body = _body(resp)
     if resp.status_code == 403 and body.get("code") == "EMAIL_NOT_VERIFIED":
         session["pending_email"] = body.get("email") or email
-        flash("Tu correo aún no está confirmado. Te enviamos un código nuevo.", "info")
+        _announce_code(body, "Tu correo aún no está confirmado. Te enviamos un código nuevo.", "info")
         return redirect(url_for("pages.verify"))
     _, message = _form_errors(resp)
     return render_template("login.html", next_url=next_url, csrf_token=csrf_token(), email=email,
@@ -125,7 +140,7 @@ def register():
         return render(values, {}, _AUTH_DOWN, 503)
     if resp.status_code == 201:
         session["pending_email"] = _body(resp).get("email", values["email"])
-        flash("Te enviamos un código de confirmación por correo.", "ok")
+        _announce_code(_body(resp), "Te enviamos un código de confirmación por correo.")
         return redirect(url_for("pages.verify"))
     body = _body(resp)
     if resp.status_code == 503 and body.get("code") == "EMAIL_DELIVERY_FAILED":
@@ -147,7 +162,7 @@ def verify():
 
     def render(error=None, status=200):
         return render_template("verify.html", csrf_token=csrf_token(), email_masked=mask_email(email),
-                               error=error), status
+                               local_mailbox=session.get("mail_local"), error=error), status
 
     if request.method == "GET":
         return render()
@@ -162,6 +177,7 @@ def verify():
         return render(_AUTH_DOWN, 503)
     if resp.status_code == 200:
         session.pop("pending_email", None)
+        session.pop("mail_local", None)
         flash("¡Correo confirmado! Bienvenido a Honolulo.", "ok")
         return _session_redirect(resp.json(), url_for("pages.index"))
     _, message = _form_errors(resp)
@@ -175,8 +191,8 @@ def resend_code():
     if not email:
         return redirect(url_for("pages.login"))
     try:
-        anonymous("auth", "POST", "/api/v1/auth/resend-code", json={"email": email})
-        flash("Si tu cuenta está pendiente de confirmar, te enviamos un código nuevo.", "ok")
+        resp = anonymous("auth", "POST", "/api/v1/auth/resend-code", json={"email": email})
+        _announce_code(_body(resp), "Si tu cuenta está pendiente de confirmar, te enviamos un código nuevo.")
     except UpstreamUnavailable:
         flash(_AUTH_DOWN, "error")
     return redirect(url_for("pages.verify"))

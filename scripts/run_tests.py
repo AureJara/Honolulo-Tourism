@@ -14,6 +14,9 @@ SUITES = ["libs/honolulo_common", "services/auth", "services/weather", "services
 
 
 def main() -> int:
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import devenv
+    devenv.run_in_project_venv(sys.argv)              # con el Python del sistema faltan las librerías del proyecto
     failed = []
     print("\n=== secretos en el código ===", flush=True)
     if subprocess.call([sys.executable, str(ROOT / "scripts" / "check_secrets.py")], cwd=ROOT):

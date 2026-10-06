@@ -8,7 +8,10 @@ secretos del hosting, no este archivo.
 
 from __future__ import annotations
 
+import os
 import secrets
+import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -61,3 +64,32 @@ def ensure_dev_secrets(path: Path = ENV_FILE) -> tuple[dict[str, str], bool]:
 
 def smtp_configured(values: dict[str, str]) -> bool:
     return all(values.get(key) for key in ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD"))
+
+
+# ------------------------------------------------------------- el Python del proyecto
+def project_python(root: Path = ROOT) -> Path | None:
+    """Intérprete del entorno virtual del proyecto (``.venv``), si existe."""
+    folder, name = ("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")
+    candidate = root / ".venv" / folder / name
+    return candidate if candidate.exists() else None
+
+
+def run_in_project_venv(argv: list[str], root: Path = ROOT) -> None:
+    """Vuelve a lanzar el script con el Python del proyecto si se lanzó con otro.
+
+    Las librerías del proyecto (Flask, Pillow…) viven en ``.venv``. Con el Python del sistema el comando falla a medias
+    (``No module named 'PIL'``). Si ya se está dentro de un entorno virtual, o no hay ``.venv``, o se define
+    ``HONOLULO_SIN_VENV``, no hace nada. Si relanza, termina con el código de salida del hijo.
+    """
+    if sys.prefix != sys.base_prefix or os.environ.get("HONOLULO_SIN_VENV"):
+        return
+    python = project_python(root)
+    if python is None:
+        return
+    print(f"Usando el entorno virtual del proyecto ({python}), no {sys.executable}.", flush=True)
+    child = subprocess.Popen([str(python), str(Path(argv[0]).resolve()), *argv[1:]])
+    while True:
+        try:
+            raise SystemExit(child.wait())
+        except KeyboardInterrupt:      # el hijo recibe el mismo Ctrl+C y apaga todo ordenadamente: aquí solo se espera
+            continue

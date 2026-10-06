@@ -62,6 +62,17 @@ def send(message: EmailMessage) -> None:
     backend(current_app.config["MAIL_BACKEND"]).send(message)
 
 
+def delivery_info() -> dict:
+    """Cómo sale el correo con la configuración actual, para que la web no afirme «te enviamos un correo» cuando el
+    mensaje se queda en una carpeta (desarrollo). En producción el envío es siempre externo (ver ``create_app``): ahí solo
+    se informa ``external: true`` y no se revela nada de la configuración."""
+    try:
+        chosen = backend(current_app.config["MAIL_BACKEND"])
+    except MailError:
+        return {"external": False, "where": ""}
+    return {"external": True} if chosen.external else {"external": False, "where": chosen.describe()}
+
+
 @register_backend("memory", external=False)
 def _send_memory(message: EmailMessage) -> None:
     current_app.extensions.setdefault("mail_outbox", []).append(message)

@@ -129,16 +129,24 @@ inventa datos (RN03) y mostrará el aviso de servicio no disponible.
 > `dev.py` se niega a arrancar si un puerto está ocupado (evita servidores antiguos sirviendo código desactualizado)
 > y al cerrar termina todo el árbol de procesos. **Los secretos no están en el código:** la primera vez genera claves
 > aleatorias en `.env.local` (ignorado por git).
+>
+> `dev.py`, `run_tests.py` y `stress.py` usan siempre el Python del proyecto (`.venv`): si los lanzas con el Python del
+> sistema se relanzan solos con el del proyecto (`HONOLULO_SIN_VENV=1` lo desactiva), así no falta ninguna librería.
 
 **Correo con el código de confirmación (envío real).** Mientras no configures un correo, `dev.py up` trabaja en *modo
-archivo*: el mensaje queda en `.mail/` y **no se envía** (lo dice al arrancar). Para que el código llegue al correo con el
-que se registra cada persona:
+archivo*: el mensaje queda en `.mail/` y **no se envía**. Lo dice al arrancar y también la pantalla del código
+(«Modo de desarrollo: el código NO se envió a tu correo…»): `auth` informa en `delivery` si el correo sale a Internet y la
+web solo afirma «te enviamos un código» cuando es verdad. En producción el envío es siempre externo y no se revela nada de la
+configuración. Para que el código llegue al correo con el que se registra cada persona:
 
 ```bash
-python scripts/dev.py setup-mail                 # pide tu Gmail y su contraseña de aplicación (la escribes tú; no se muestra)
+python scripts/dev.py setup-mail                 # tu Gmail y su contraseña de APLICACIÓN (16 letras, no la normal; no se muestra)
 python scripts/dev.py test-mail tu_correo@gmail.com   # comprueba el envío antes de usarlo
 python scripts/dev.py up                         # ahora los códigos salen por correo
 ```
+
+`setup-mail` solo acepta una contraseña de aplicación de Google (16 letras) y nunca repite lo que escribes; si lo guardado
+no tiene esa forma, `dev.py up` lo avisa al arrancar (Gmail rechazaría cada envío con el error 535).
 
 La contraseña de aplicación se crea en <https://myaccount.google.com/apppasswords> (requiere verificación en dos pasos) y
 se guarda solo en `.env.local`. La automatización de QA necesita leer los códigos de `.mail/`, así que se ejecuta con
@@ -168,7 +176,7 @@ docker compose up --build              # http://localhost:8000
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 735 pruebas: común 120 · auth 143 · weather 30 · forecast 88 · catalog 179 · web 175
+python scripts/run_tests.py            # revisión de secretos + 778 pruebas: común 150 · auth 149 · weather 30 · forecast 88 · catalog 179 · web 182
 python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
 cd qa && python -m pytest -q           # 175 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```

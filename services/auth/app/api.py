@@ -62,7 +62,7 @@ def _verification_payload(user: User) -> dict:
     cfg = current_app.config
     return {"status": "verification_required", "email": user.email,
             "expires_in": cfg["VERIFICATION_CODE_TTL_MIN"] * 60,
-            "resend_after": cfg["VERIFICATION_RESEND_SECONDS"]}
+            "resend_after": cfg["VERIFICATION_RESEND_SECONDS"], "delivery": mailer.delivery_info()}
 
 
 @bp.post("/register")
@@ -133,7 +133,8 @@ def resend_code():
         db.session.commit()
         if not _send_code(user, code):
             log.error("No se pudo reenviar el código de confirmación")
-    return jsonify({"status": "accepted", "resend_after": current_app.config["VERIFICATION_RESEND_SECONDS"]}), 202
+    return jsonify({"status": "accepted", "resend_after": current_app.config["VERIFICATION_RESEND_SECONDS"],
+                    "delivery": mailer.delivery_info()}), 202
 
 
 @bp.post("/login")
@@ -174,7 +175,8 @@ def login():
         db.session.commit()
         _send_code(user, code)
         raise ApiError(403, "EMAIL_NOT_VERIFIED", "Confirma tu correo con el código que te enviamos.",
-                       extra={"email": user.email, "resend_after": cfg["VERIFICATION_RESEND_SECONDS"]})
+                       extra={"email": user.email, "resend_after": cfg["VERIFICATION_RESEND_SECONDS"],
+                              "delivery": mailer.delivery_info()})
 
     user.failed_attempts = 0
     user.locked_until = None

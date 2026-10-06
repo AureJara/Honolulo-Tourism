@@ -5,7 +5,7 @@
 | **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
 | **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
-| **Resultado** | **910 pruebas automatizadas en verde** (735 unitarias/integración + 175 de QA de extremo a extremo) y 17 defectos encontrados y corregidos (ninguno crítico) |
+| **Resultado** | **953 pruebas automatizadas en verde** (778 unitarias/integración + 175 de QA de extremo a extremo) y 21 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,7 +14,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 735 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 778 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
@@ -32,12 +32,12 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Suite | Pruebas | Resultado |
 |---|---:|---|
 | Revisión de secretos en el código (`scripts/check_secrets.py`) | — | ✅ |
-| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés) | 120 | ✅ |
-| `auth-service` (incluye la auditoría de seguridad) | 143 | ✅ |
+| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés, configuración del correo, entorno de desarrollo) | 150 | ✅ |
+| `auth-service` (incluye la auditoría de seguridad y el aviso de cómo sale el código) | 149 | ✅ |
 | `weather-service` | 30 | ✅ |
 | `forecast-service` | 88 | ✅ |
 | `catalog-service` | 179 | ✅ |
-| `web` (incluye el límite por IP, la pantalla de seguridad y las llamadas internas) | 175 | ✅ |
+| `web` (incluye el límite por IP, la pantalla de seguridad, las llamadas internas y el aviso del código) | 182 | ✅ |
 | QA: aceptación / seguridad / resiliencia / sesión / integridad / rendimiento | 28 / 49 / 7 / 6 / 16 / 12 | ✅ |
 | QA nuevo: opiniones y moderación / entrega de correo / privacidad y secretos | 23 / 6 / 18 | ✅ |
 
@@ -93,6 +93,10 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | **D15** | Media (operación) | Tras un cierre brusco (apagón, ventana cerrada) PostgreSQL tarda más de 10 s en recuperarse y `dev.py up` fallaba con `TimeoutExpired`; había que repetir el comando a mano. | Ocurrió varias veces durante las pruebas; reproducido matando PostgreSQL de golpe | ✅ Corregido: `dev.py` espera la recuperación (hasta 3 min), explica qué pasa y continúa solo + 3 pruebas |
 | **D16** | Baja (pruebas) | La contraseña aleatoria de QA podía contener un fragmento del correo de prueba (1 de cada 256 ejecuciones) y la nueva política la rechazaba: una prueba fallaba al azar. | Falla intermitente de `test_scenario7_gmail_aliases…` | ✅ Corregido: contraseña independiente del esquema de correos |
 | **D17** | Baja (herramientas) | Una corrida de `run_tests.py` dejó 137 errores en la suite de `auth` (`AssertionError` en `pgserver`): el PostgreSQL desechable de las pruebas no terminó de arrancar porque la suite anterior aún lo apagaba, y `pgserver` guarda la instancia fallida en su caché y la devuelve a medias en los intentos siguientes. | Falla intermitente en una corrida completa (no se repitió en 3 corridas posteriores) | ✅ Corregido: reintentos que descartan la instancia a medias + 2 pruebas |
+| **D18** | Media (honestidad de la interfaz) | Tras registrarse, la web decía «Te enviamos un código de confirmación por correo» aunque en modo archivo (sin SMTP configurado) el código no salía: quedaba en `.mail/` y la persona nunca lo recibía. | Se notó registrando a mano en desarrollo, no en las pruebas (todas simulaban el envío) | ✅ Corregido: `auth` informa en `delivery` si el correo sale a Internet; la web dice dónde quedó el código y cómo configurar el envío; en producción solo se informa `external` y no se revela nada + 13 pruebas |
+| **D19** | Media (herramientas) | `setup-mail` aceptaba cualquier cadena de 8 caracteres o más como «contraseña de aplicación»: se guardó un valor que no tenía la forma de una contraseña de aplicación de Google (16 letras), casi seguro la contraseña normal. Gmail la rechaza (error 535) y además quedaba en texto plano en `.env.local`. | Ningún correo con código podía salir y `dev.py up` no avisaba de nada; se descubrió investigando que «no llegó el correo» | ✅ Corregido: `setup-mail` solo acepta 16 letras y nunca repite lo escrito; `dev.py up` avisa al arrancar si lo guardado no tiene esa forma + 18 pruebas |
+| **D20** | Media (herramientas) | `python scripts/dev.py test-mail` terminaba con `KeyError: '_SQLA_BASE'`: el comando nunca había podido funcionar (solo envía un correo pero pedía la dirección de una base de datos que no levanta). Al fallar el envío mostraba además un traceback de Python en lugar del motivo. | La prueba de envío que se recomienda antes de usar el correo no se podía ejecutar | ✅ Corregido: no exige la base de datos, sale con el motivo claro y código de error, sin traceback + 4 pruebas |
+| **D21** | Media (herramientas) | Lanzado con el Python del sistema (no el del proyecto), `dev.py up` fallaba con `No module named 'PIL'` a mitad de las migraciones. | El sistema no arrancaba desde una terminal normal, solo desde el entorno virtual | ✅ Corregido: `dev.py`, `run_tests.py` y `stress.py` se relanzan solos con el Python de `.venv` (el padre espera sin cortar el Ctrl+C para que el hijo apague PostgreSQL ordenadamente) + 8 pruebas |
 
 Defectos adicionales atrapados por las propias pruebas antes de llegar a QA: los dígitos Unicode de ancho completo pasaban la validación del código (regex `\d`); la bomba de píxeles se rechazaba con un mensaje engañoso.
 
@@ -179,7 +183,7 @@ necesitaría protección en el borde.
 
 ```bash
 python scripts/dev.py up --mail file --no-rate-limit   # sistema completo (otra terminal); la QA lee los códigos de .mail/
-python scripts/run_tests.py                    # revisión de secretos + 735 pruebas unitarias y de integración
+python scripts/run_tests.py                    # revisión de secretos + 778 pruebas unitarias y de integración
 cd qa && python -m pytest -q                   # 175 pruebas de QA de extremo a extremo
 ```
 
