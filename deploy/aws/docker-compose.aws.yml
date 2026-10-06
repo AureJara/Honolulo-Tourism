@@ -1,0 +1,21 @@
+# Se usa JUNTO con el compose principal (el .env ya trae COMPOSE_FILE, así que basta `docker compose up -d --build`):
+#   docker compose -f docker-compose.yml -f deploy/aws/docker-compose.aws.yml up -d --build
+#
+# Añade Caddy, que es lo único que queda abierto a Internet (80 y 443). La web, los servicios y PostgreSQL siguen en la red
+# interna de Docker. Aunque el compose principal publica el 8000 de la web, el Security Group de AWS NO debe abrirlo.
+services:
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN en el .env}
+    volumes:
+      - ./deploy/aws/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data              # aquí se guardan los certificados: no borrar este volumen
+      - caddy_config:/config
+    depends_on: [web]
+
+volumes:
+  caddy_data:
+  caddy_config:

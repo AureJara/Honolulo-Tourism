@@ -173,10 +173,18 @@ docker compose up --build              # http://localhost:8000
 `SMTP_PORT=587`, `SMTP_USER=tu_cuenta@gmail.com` y `SMTP_PASSWORD` = una **contraseña de aplicación** de Google
 (requiere verificación en dos pasos; no la contraseña normal).
 
+### Despliegue en AWS
+
+Guía paso a paso en [`docs/despliegue-aws.md`](docs/despliegue-aws.md): un servidor EC2 con Docker Compose y **Caddy**
+delante (HTTPS automático, corte de conexiones lentas y de cuerpos gigantes). Los archivos están en `deploy/aws/`:
+`Caddyfile`, `docker-compose.aws.yml` (solo Caddy queda abierto, puertos 80 y 443) y `generar-env.sh` (crea el `.env`
+con secretos aleatorios sin sobrescribir uno existente). **No se han construido ni ejecutado** (no hay Docker en el equipo
+de desarrollo): se verificaron con pruebas estáticas y ejecutando el script, y la guía dice dónde mirar si algo falla.
+
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 778 pruebas: común 150 · auth 149 · weather 30 · forecast 88 · catalog 179 · web 182
+python scripts/run_tests.py            # revisión de secretos + 796 pruebas: común 168 · auth 149 · weather 30 · forecast 88 · catalog 179 · web 182
 python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
 cd qa && python -m pytest -q           # 175 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
@@ -381,6 +389,8 @@ libs/honolulo_common/        errores, JWT, openmeteo, conditions, timeutil, test
 services/{auth,weather,forecast,catalog,web}/   app/ · migrations/ · tests/ · Dockerfile
 qa/                          pruebas de QA de extremo a extremo + QA-REPORT.md
 infra/postgres/init/         crea una base y un rol por servicio (Docker)
+deploy/aws/                  Caddyfile, docker-compose.aws.yml y generar-env.sh (despliegue en un servidor EC2)
+docs/despliegue-aws.md       guía paso a paso para desplegar en AWS
 scripts/dev.py               entorno local sin Docker (+ setup-mail, test-mail, create-admin, set-role)
 scripts/devenv.py            lee y genera .env.local (secretos aleatorios; fuera de git)
 scripts/check_secrets.py     falla si hay contraseñas o claves escritas en el código

@@ -1,0 +1,23 @@
+# Proxy inverso con HTTPS automático (Let's Encrypt) delante de la web. El dominio llega en DOMAIN (lo define el .env).
+# Además de poner el candado, corta lo que gunicorn solo no aguanta: conexiones que envían la petición a cuentagotas
+# (slowloris), cabeceras gigantes y cuerpos más grandes que los de la propia web.
+{
+	servers {
+		timeouts {
+			read_header 10s
+			read_body   30s
+			idle        2m
+		}
+		max_header_size 16KB
+	}
+}
+
+{$DOMAIN} {
+	encode gzip
+
+	request_body {
+		max_size 6MB
+	}
+
+	reverse_proxy web:8000
+}

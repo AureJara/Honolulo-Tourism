@@ -5,7 +5,7 @@
 | **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
 | **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
-| **Resultado** | **953 pruebas automatizadas en verde** (778 unitarias/integración + 175 de QA de extremo a extremo) y 21 defectos encontrados y corregidos (ninguno crítico) |
+| **Resultado** | **971 pruebas automatizadas en verde** (796 unitarias/integración + 175 de QA de extremo a extremo) y 21 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,7 +14,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 778 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 796 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
@@ -32,7 +32,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Suite | Pruebas | Resultado |
 |---|---:|---|
 | Revisión de secretos en el código (`scripts/check_secrets.py`) | — | ✅ |
-| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés, configuración del correo, entorno de desarrollo) | 150 | ✅ |
+| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés, configuración del correo, entorno de desarrollo, archivos del despliegue en AWS) | 168 | ✅ |
 | `auth-service` (incluye la auditoría de seguridad y el aviso de cómo sale el código) | 149 | ✅ |
 | `weather-service` | 30 | ✅ |
 | `forecast-service` | 88 | ✅ |
@@ -172,7 +172,7 @@ necesitaría protección en el borde.
 
 1. **Entrega real de correo a Gmail**: se probó de punta a punta contra un servidor SMTP local (autenticación, destinatario correcto, fallos), pero **no** contra Gmail ni en bandejas reales (no hay credenciales en el entorno). Usar `python scripts/dev.py setup-mail` y `test-mail` con la cuenta real; revisar también la carpeta de spam.
 2. **«Loguear con cuentas de Gmail»** se implementó como correo (Gmail o cualquier otro) confirmado con código. **No** hay «Iniciar sesión con Google» (OAuth); requiere credenciales de Google Cloud.
-3. **Docker**: los `Dockerfile` y `docker-compose.yml` no se construyeron (no hay Docker en el equipo).
+3. **Docker y el despliegue en AWS**: los `Dockerfile`, `docker-compose.yml` y los archivos de `deploy/aws/` no se construyeron ni ejecutaron (no hay Docker en el equipo). Se comprobó de forma estática que las variables del compose coinciden con las que lee cada servicio, que todo lo que copian los `Dockerfile` existe, que solo Caddy queda abierto a Internet y que `generar-env.sh` funciona y no sobrescribe un `.env`; la primera construcción real puede revelar detalles.
 4. **Navegadores y dispositivos**: solo Chromium; sin lectores de pantalla reales ni dispositivos físicos.
 5. **Carga**: se midió con `scripts/stress.py` contra el servidor de desarrollo de Flask en Windows (hasta 400 conexiones, ingreso masivo, 300 conexiones lentas, cuerpos gigantes). **No** contra gunicorn ni Docker, y sin pruebas de larga duración (soak): las cifras son de referencia y varían con la carga del equipo.
 6. **Políticas de privacidad y de cookies**: son textos base; requieren revisión legal (Ley N.° 29733) y un correo de contacto real (`CONTACT_EMAIL`).
@@ -183,7 +183,7 @@ necesitaría protección en el borde.
 
 ```bash
 python scripts/dev.py up --mail file --no-rate-limit   # sistema completo (otra terminal); la QA lee los códigos de .mail/
-python scripts/run_tests.py                    # revisión de secretos + 778 pruebas unitarias y de integración
+python scripts/run_tests.py                    # revisión de secretos + 796 pruebas unitarias y de integración
 cd qa && python -m pytest -q                   # 175 pruebas de QA de extremo a extremo
 ```
 
