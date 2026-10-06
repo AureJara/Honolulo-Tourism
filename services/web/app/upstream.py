@@ -16,8 +16,19 @@ import time
 import requests
 from flask import current_app, g, request
 
+from honolulo_common.http_client import service_session
+
 SERVICES = {"auth": "AUTH_SERVICE_URL", "weather": "WEATHER_SERVICE_URL", "forecast": "FORECAST_SERVICE_URL",
             "catalog": "CATALOG_SERVICE_URL"}
+
+# Una sola sesión para todas las llamadas internas: reutiliza conexiones en lugar de abrir (y gastar un puerto local) por
+# cada petición. Sin cookies y compartible entre hilos; ver honolulo_common.http_client.
+_http = service_session()
+
+
+def _timeout(cfg) -> tuple[float, float]:
+    """(tiempo para conectar, tiempo para recibir la respuesta)."""
+    return cfg["UPSTREAM_CONNECT_TIMEOUT_S"], cfg["UPSTREAM_TIMEOUT_S"]
 
 
 class UpstreamUnavailable(Exception):
@@ -49,9 +60,9 @@ class _RefreshCoordinator:
             if refresh_token in self._recent:
                 return self._recent[refresh_token][1]
             try:
-                resp = requests.post(f"{cfg['AUTH_SERVICE_URL'].rstrip('/')}/api/v1/auth/refresh",
-                                     json={"refresh_token": refresh_token}, headers=_client_headers(client_ip),
-                                     timeout=cfg["UPSTREAM_TIMEOUT_S"])
+                resp = _http.post(f"{cfg['AUTH_SERVICE_URL'].rstrip('/')}/api/v1/auth/refresh",
+                                  json={"refresh_token": refresh_token}, headers=_client_headers(client_ip),
+                                  timeout=_timeout(cfg))
             except requests.RequestException:
                 raise UpstreamUnavailable("auth") from None
             if resp.status_code != 200:
@@ -95,8 +106,8 @@ def _refresh_session(state: SessionState, failed_access: str | None) -> bool:
 def _request(cfg, service: str, method: str, path: str, *, params=None, json=None, headers=None,
              data=None, files=None):
     try:
-        return requests.request(method, cfg[SERVICES[service]].rstrip("/") + path, params=params, json=json,
-                                data=data, files=files, headers=headers, timeout=cfg["UPSTREAM_TIMEOUT_S"])
+        return _http.request(method, cfg[SERVICES[service]].rstrip("/") + path, params=params, json=json,
+                             data=data, files=files, headers=headers, timeout=_timeout(cfg))
     except requests.RequestException:
         raise UpstreamUnavailable(service) from None
 

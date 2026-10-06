@@ -7,10 +7,12 @@ Orden de preferencia:
 
 from __future__ import annotations
 
+import http.server
 import os
 import re
 import shutil
 import tempfile
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -241,3 +243,73 @@ class _SmtpSession:
         self.say("221 adiós")
         self.done = True
 
+
+class CountingHttpServer:
+    """Servidor HTTP/1.1 local con conexiones persistentes que cuenta conexiones y peticiones.
+
+    Sirve para comprobar que un cliente reutiliza conexiones: ``connections`` sube una vez por cada conexión TCP aceptada y
+    ``requests`` una vez por cada petición recibida (también las que se descartan a propósito). Con
+    ``drop_second_request`` cierra la primera conexión sin responder cuando el cliente la reutiliza (simula un servidor que
+    la cerró justo antes), y con ``set_cookie`` envía esa cookie en cada respuesta.
+    """
+
+    def __init__(self, *, set_cookie: str | None = None, drop_second_request: bool = False) -> None:
+        outer = self
+        self.connections = 0
+        self.requests = 0
+        self.cookies_seen: list[str | None] = []
+        self._lock = threading.Lock()
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def setup(self) -> None:
+                super().setup()
+                self.served = 0
+                self.conn_id = outer.connections
+
+            def log_message(self, *args) -> None:
+                pass
+
+            def answer(self) -> None:
+                length = int(self.headers.get("Content-Length") or 0)
+                if length:
+                    self.rfile.read(length)
+                with outer._lock:
+                    outer.requests += 1
+                    outer.cookies_seen.append(self.headers.get("Cookie"))
+                self.served += 1
+                if drop_second_request and self.conn_id == 1 and self.served == 2:
+                    self.close_connection = True
+                    return
+                body = b'{"ok": true}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                if set_cookie:
+                    self.send_header("Set-Cookie", set_cookie)
+                self.end_headers()
+                self.wfile.write(body)
+
+            do_GET = do_POST = do_PUT = do_DELETE = answer
+
+        class Server(http.server.ThreadingHTTPServer):
+            daemon_threads = True
+
+            def get_request(self):
+                accepted = super().get_request()
+                with outer._lock:
+                    outer.connections += 1
+                return accepted
+
+        self._server = Server(("127.0.0.1", 0), Handler)
+        self.url = f"http://127.0.0.1:{self._server.server_address[1]}"
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    def __enter__(self) -> "CountingHttpServer":
+        self._thread.start()
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self._server.shutdown()
+        self._server.server_close()

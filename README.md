@@ -168,7 +168,7 @@ docker compose up --build              # http://localhost:8000
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 714 pruebas: común 103 · auth 143 · weather 30 · forecast 88 · catalog 179 · web 171
+python scripts/run_tests.py            # revisión de secretos + 735 pruebas: común 120 · auth 143 · weather 30 · forecast 88 · catalog 179 · web 175
 python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
 cd qa && python -m pytest -q           # 175 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
@@ -228,6 +228,58 @@ unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[in
   declarados que no se usen (lo vigila una prueba), `.dockerignore` deja fuera secretos y datos locales de las imágenes y
   Dependabot propone las actualizaciones cada semana. `pip-audit` no encuentra vulnerabilidades conocidas.
 
+## Resistencia a abusos y pruebas de estrés
+
+`scripts/stress.py` mide el sistema **local** (solo acepta `127.0.0.1`: no sirve para atacar servidores ajenos). Cada escenario
+mide también a una persona normal que entra desde otra IP, porque lo importante no es solo si el sistema aguanta, sino si
+**una persona abusadora perjudica a las demás**.
+
+```bash
+python scripts/dev.py up --no-rate-limit          # capacidad real (sin el límite por IP)
+python scripts/stress.py baseline                 # latencia en calma
+python scripts/stress.py read-flood --concurrency 100 --duration 15
+python scripts/stress.py ramp                     # sube de 10 a 400 conexiones para ver dónde se degrada
+python scripts/stress.py login-flood              # intentos de ingreso en masa (cada uno calcula un hash scrypt)
+python scripts/stress.py slow-connections         # cientos de conexiones lentas abiertas
+python scripts/stress.py oversize                 # cuerpos, direcciones y cabeceras gigantes
+python scripts/stress.py recovery                 # ¿vuelve a la normalidad?
+# el límite por IP en acción (otra IP para la persona normal):  TRUSTED_PROXY_HOPS=1 python scripts/dev.py up
+```
+
+Medido en Windows con el servidor de desarrollo de Flask (cifras de referencia: varían con la carga del equipo):
+
+| Prueba | Resultado |
+|---|---|
+| Una persona, 100 conexiones a la vez, **con** el límite por IP | De 5 641 peticiones se atendieron 300 (el límite por minuto) y 5 341 recibieron `429`. La persona normal no se vio afectada y ningún servicio se cayó. |
+| Lecturas **sin** límite, 50 conexiones | ≈ 215 peticiones/s sin errores; la persona normal pasa de ~30 ms a ~240 ms. |
+| Lecturas sin límite, 100 o más conexiones | Aparecen errores: el servidor de desarrollo cierra la conexión tras cada respuesta y el equipo se queda sin puertos locales. Ningún servicio se cae y todo responde de nuevo a los pocos segundos. |
+| Ingreso masivo **sin** límite, 30 conexiones | ≈ 40 intentos/s (cada uno calcula un hash scrypt): la persona normal pasa de ~30 ms a ~500 ms. Con el límite: 10 intentos cada 5 min por IP. |
+| 300 conexiones lentas abiertas | La persona normal no se ve afectada, pero el servidor de desarrollo las tolera indefinidamente (ver abajo). |
+| Cuerpo de 1, 7 y 40 MB, dirección de 100 000 caracteres, 500 cabeceras | Rechazados al instante (`413`, `414`, `431`). |
+| Después de toda la carga | Todos los servicios responden; memoria 378 → 391 MB (sin fugas). |
+
+**Qué se corrigió.** La web llamaba a los demás servicios con `requests.request(...)`, que abre una conexión nueva en cada
+llamada y deja un puerto local ocupado durante minutos: a unos cientos de llamadas por segundo esos puertos se agotan y la web
+deja de hablar con el resto aunque ninguno esté caído. Ahora usa una sesión compartida con *pool* de conexiones
+(`honolulo_common/http_client.py`): sin cookies (no se mezclan entre personas), repite una vez las lecturas si el servidor cerró
+la conexión justo antes y nunca repite escrituras. Comparado de forma directa contra un servidor que reutiliza conexiones, cada
+llamada interna pasa de ≈ 5–6 ms a ≈ 3 ms y se abren 1–7 conexiones en lugar de 800–1 200. Además, el tiempo para conectar con
+un servicio es de 3 s (`UPSTREAM_CONNECT_TIMEOUT_S`), aparte de los 12 s para esperar la respuesta: un servicio caído libera el
+hilo enseguida.
+
+**Qué no se pudo comprobar aquí y conviene resolver al publicar** (gunicorn no funciona en Windows y las imágenes de Docker no
+se construyeron):
+
+- **Conexiones lentas («slowloris»).** Con `gunicorn -w 1 --threads 8`, unas pocas conexiones que envían la petición a
+  cuentagotas podrían dejar a la web sin hilos libres. Se resuelve con un proxy delante (nginx, Caddy o el de la plataforma)
+  que corte las conexiones lentas (`client_header_timeout`, `client_body_timeout`), limite conexiones por IP (`limit_conn`),
+  peticiones por segundo (`limit_req`) y el tamaño del cuerpo (`client_max_body_size`). Es la recomendación habitual y
+  **no está probada aquí**.
+- **Hilos de la web.** Cada petición que pasa por la web retiene un hilo mientras espera al servicio interno: con 8 hilos, un
+  servicio lento puede ocuparlos todos hasta 12 s. Conviene subir `--threads` (la web casi solo espera) y vigilar los tiempos.
+- **El límite por IP no frena un ataque distribuido** (muchas IP a la vez) y vive en la memoria de un solo proceso. Para eso
+  hace falta protección en el borde (CDN o WAF) y, con varios procesos, un almacén compartido (ver «Cómo extender»).
+
 ## API
 
 La web expone el contrato del spec en `/api/v1/…`; todo el módulo meteorológico exige sesión (RF01 → `401`).
@@ -279,6 +331,7 @@ extensión (cada uno tiene pruebas que lo demuestran, `test_extensibility.py` y 
 | Una regla de límite de peticiones | `Rule` en `default_rules()` (o `limiter.add(Rule(...))`) | `services/web/app/ratelimit.py` |
 | Otro almacén del límite (p. ej. Redis, con varios procesos) | clase con el método `hit(clave, límite, ventana)` | `services/web/app/ratelimit.py` |
 | Un tipo de evento de seguridad | miembro nuevo de `Event` y una llamada `audit.record(...)` | `services/auth/app/audit.py` |
+| Un escenario de prueba de estrés | función con `@scenario("nombre", "ayuda")` | `scripts/stress.py` |
 | Un patrón de secreto a vigilar | entrada en `RULES` | `scripts/check_secrets.py` |
 | Otro proveedor del clima | clase que cumpla `WeatherProvider` + `@register_provider("nombre")`, y `WEATHER_PROVIDER=nombre` (con `WEATHER_PROVIDER_MODULES=mi.modulo` si no está incluido); `weather` y `forecast` no cambian | `libs/honolulo_common/honolulo_common/weather_provider.py` (interfaz y registro), `openmeteo.py` (ejemplo) |
 
@@ -297,7 +350,8 @@ en la web, `reviews_api.py` y `admin_reviews.py` separados de la pasarela del cl
 - **Fotos en disco** (volumen `media`); la interfaz `storage.py` permite pasar a S3.
 - **Tailwind por CDN** y fuentes de Google, como en el diseño; para producción conviene compilar y autoalojar.
 - **Política de privacidad**: texto base que requiere revisión legal.
-- Sin limitación de intentos por IP en el login (sí bloqueo de cuenta tras 5 fallos): usar un *rate limiter* en el proxy.
+- **Límite por IP en memoria:** protege a la web de una persona abusadora (ver «Resistencia a abusos»), pero no de un ataque
+  distribuido, y no se comparte entre varios procesos. El bloqueo de cuenta tras 5 fallos sigue activo.
 - **Límite por IP y auditoría:** la IP que ve `auth` es la que le reenvía la web (`X-Client-IP`); si se publica detrás de un
   proxy hay que declararlo (`TRUSTED_PROXY_HOPS`) o todas las personas parecerán la misma IP. Los eventos de seguridad
   guardan la IP (dato personal): la política de privacidad lo dice y fija 180 días.
@@ -323,5 +377,6 @@ scripts/dev.py               entorno local sin Docker (+ setup-mail, test-mail, 
 scripts/devenv.py            lee y genera .env.local (secretos aleatorios; fuera de git)
 scripts/check_secrets.py     falla si hay contraseñas o claves escritas en el código
 scripts/freeze_lock.py       regenera requirements-lock.txt (versiones exactas probadas)
+scripts/stress.py            pruebas de estrés del sistema local (solo 127.0.0.1)
 scripts/run_tests.py         revisión de secretos + todas las suites
 ```

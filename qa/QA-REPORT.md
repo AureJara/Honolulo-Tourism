@@ -5,7 +5,7 @@
 | **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
 | **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
-| **Resultado** | **889 pruebas automatizadas en verde** (714 unitarias/integración + 175 de QA de extremo a extremo) y 17 defectos encontrados y corregidos (ninguno crítico) |
+| **Resultado** | **910 pruebas automatizadas en verde** (735 unitarias/integración + 175 de QA de extremo a extremo) y 17 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,7 +14,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 714 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 735 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
@@ -32,12 +32,12 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Suite | Pruebas | Resultado |
 |---|---:|---|
 | Revisión de secretos en el código (`scripts/check_secrets.py`) | — | ✅ |
-| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas) | 103 | ✅ |
+| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés) | 120 | ✅ |
 | `auth-service` (incluye la auditoría de seguridad) | 143 | ✅ |
 | `weather-service` | 30 | ✅ |
 | `forecast-service` | 88 | ✅ |
 | `catalog-service` | 179 | ✅ |
-| `web` (incluye el límite por IP y la pantalla de seguridad) | 171 | ✅ |
+| `web` (incluye el límite por IP, la pantalla de seguridad y las llamadas internas) | 175 | ✅ |
 | QA: aceptación / seguridad / resiliencia / sesión / integridad / rendimiento | 28 / 49 / 7 / 6 / 16 / 12 | ✅ |
 | QA nuevo: opiniones y moderación / entrega de correo / privacidad y secretos | 23 / 6 / 18 | ✅ |
 
@@ -131,6 +131,27 @@ Se revisó cada punto contra el código real (9 estaban resueltos, 6 parciales) 
 Pendiente (decisión de producto, no se hizo): verificación en dos pasos para administradores, recuperación de contraseña,
 cabecera `script-src` estricta (requiere compilar Tailwind y alojar las fuentes) y reducir la vida del token de acceso.
 
+### Pruebas de estrés y resistencia a abusos
+
+Herramienta propia: `scripts/stress.py` (solo apunta a `127.0.0.1`; 9 pruebas, incluida la que comprueba que rechaza servidores
+ajenos). Mide a la vez a una persona normal desde otra IP para saber si un abusador perjudica a los demás. Resultados completos en
+el README («Resistencia a abusos y pruebas de estrés»).
+
+| Hallazgo | Corrección | Prueba |
+|---|---|---|
+| **E1 · Cada llamada interna de la web abría una conexión TCP nueva** (`requests.request`): a ≥ 100 conexiones simultáneas el equipo agotó los puertos locales, la web y el catálogo dejaron de responder unos segundos y la persona normal quedó sin servicio (se recuperó sola; ningún proceso murió) | Sesión compartida con pool, sin cookies, con una repetición segura de lecturas (`honolulo_common/http_client.py`). Cada llamada pasa de ≈ 5–6 ms a ≈ 3 ms y de 800–1 200 conexiones a 1–7 en la misma comparación | `test_http_client.py` (8), `test_upstream_pooling.py` (4) |
+| **E2 · Un servicio caído retenía el hilo de la web** hasta los 12 s de espera | Tiempo de conexión aparte y corto (`UPSTREAM_CONNECT_TIMEOUT_S`, 3 s) | `test_upstream_pooling.py` |
+| **E3 · Documentación obsoleta**: el README aún decía «sin limitación de intentos por IP» | Corregido | — |
+
+Comprobado sin hallazgos: con el límite por IP, una sola persona con 100 conexiones solo consigue 300 respuestas por minuto y el resto
+recibe `429` sin afectar a nadie más; cuerpos de hasta 40 MB, direcciones de 100 000 caracteres y 500 cabeceras se rechazan al instante;
+no hay fuga de memoria tras la carga; todo se recupera.
+
+Abierto (no es un defecto del código, sino de cómo se publique): conexiones lentas («slowloris») y número de hilos de gunicorn
+necesitan un proxy delante y no se pudieron probar (gunicorn no corre en Windows; Docker sin construir). El ingreso masivo es la
+petición anónima más cara (≈ 40 por segundo, un hash scrypt cada una): el límite por IP la contiene, pero un ataque desde muchas IP
+necesitaría protección en el borde.
+
 ## 5. Observaciones (no son defectos) y riesgos aceptados
 
 - **Caché pública de 30 s** en `/api/v1/places`: tras editar, un visitante puede ver el texto anterior hasta 30 s (la foto usa claves inmutables, sin este efecto).
@@ -149,7 +170,7 @@ cabecera `script-src` estricta (requiere compilar Tailwind y alojar las fuentes)
 2. **«Loguear con cuentas de Gmail»** se implementó como correo (Gmail o cualquier otro) confirmado con código. **No** hay «Iniciar sesión con Google» (OAuth); requiere credenciales de Google Cloud.
 3. **Docker**: los `Dockerfile` y `docker-compose.yml` no se construyeron (no hay Docker en el equipo).
 4. **Navegadores y dispositivos**: solo Chromium; sin lectores de pantalla reales ni dispositivos físicos.
-5. **Carga**: solo humo con 10 concurrentes; sin pruebas de estrés/soak ni servidor de producción (gunicorn).
+5. **Carga**: se midió con `scripts/stress.py` contra el servidor de desarrollo de Flask en Windows (hasta 400 conexiones, ingreso masivo, 300 conexiones lentas, cuerpos gigantes). **No** contra gunicorn ni Docker, y sin pruebas de larga duración (soak): las cifras son de referencia y varían con la carga del equipo.
 6. **Políticas de privacidad y de cookies**: son textos base; requieren revisión legal (Ley N.° 29733) y un correo de contacto real (`CONTACT_EMAIL`).
 7. **Datos de fotos reales**: las cascadas del diseño muestran un marcador hasta que el administrador suba fotos.
 8. Sin herramientas externas de pentesting (ZAP/Burp); la batería de seguridad es manual/automatizada propia.
@@ -158,7 +179,7 @@ cabecera `script-src` estricta (requiere compilar Tailwind y alojar las fuentes)
 
 ```bash
 python scripts/dev.py up --mail file --no-rate-limit   # sistema completo (otra terminal); la QA lee los códigos de .mail/
-python scripts/run_tests.py                    # revisión de secretos + 714 pruebas unitarias y de integración
+python scripts/run_tests.py                    # revisión de secretos + 735 pruebas unitarias y de integración
 cd qa && python -m pytest -q                   # 175 pruebas de QA de extremo a extremo
 ```
 

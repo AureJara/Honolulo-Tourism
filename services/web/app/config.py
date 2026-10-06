@@ -10,6 +10,8 @@ class Config:
     FORECAST_SERVICE_URL = os.getenv("FORECAST_SERVICE_URL", "http://127.0.0.1:5003")
     CATALOG_SERVICE_URL = os.getenv("CATALOG_SERVICE_URL", "http://127.0.0.1:5004")
     UPSTREAM_TIMEOUT_S = float(os.getenv("UPSTREAM_TIMEOUT_S", "12"))
+    # Un servicio caído debe fallar en segundos, no retener el hilo los 12 s completos de espera por la respuesta.
+    UPSTREAM_CONNECT_TIMEOUT_S = float(os.getenv("UPSTREAM_CONNECT_TIMEOUT_S", "3"))
 
     # Cookies de sesión: HttpOnly siempre; Secure en producción (HTTPS).
     COOKIE_SECURE = os.getenv("COOKIE_SECURE", "1" if APP_ENV == "production" else "0") == "1"
