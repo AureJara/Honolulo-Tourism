@@ -157,7 +157,11 @@ se guarda solo en `.env.local`. La automatización de QA necesita leer los códi
 ```bash
 python scripts/dev.py create-admin               # crea uno nuevo (pide nombre, apellido y contraseña sin mostrarla)
 python scripts/dev.py set-role <correo> admin    # o promueve una cuenta existente (con `user` la degrada)
+python scripts/dev.py set-password <correo>      # restablece la contraseña de una cuenta (la escribes sin que se vea)
 ```
+
+`set-password` aplica la misma política que el registro, desbloquea la cuenta, cierra todas sus sesiones abiertas y deja el
+cambio en la auditoría. En el servidor de AWS: `docker compose exec auth flask --app app:create_app set-password`.
 
 ### Con Docker Compose
 
@@ -184,7 +188,7 @@ de desarrollo): se verificaron con pruebas estáticas y ejecutando el script, y 
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 826 pruebas: común 178 · auth 149 · weather 30 · forecast 88 · catalog 179 · web 202
+python scripts/run_tests.py            # revisión de secretos + 918 pruebas: común 178 · auth 157 · weather 30 · forecast 88 · catalog 235 · web 230
 python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
 cd qa && python -m pytest -q           # 176 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
@@ -415,7 +419,7 @@ qa/                          pruebas de QA de extremo a extremo + QA-REPORT.md
 infra/postgres/init/         crea una base y un rol por servicio (Docker)
 deploy/aws/                  Caddyfile, docker-compose.aws.yml y generar-env.sh (despliegue en un servidor EC2)
 docs/despliegue-aws.md       guía paso a paso para desplegar en AWS
-scripts/dev.py               entorno local sin Docker (+ setup-mail, test-mail, create-admin, set-role)
+scripts/dev.py               entorno local sin Docker (+ setup-mail, test-mail, create-admin, set-role, set-password)
 scripts/devenv.py            lee y genera .env.local (secretos aleatorios; fuera de git)
 scripts/check_secrets.py     falla si hay contraseñas o claves escritas en el código
 scripts/freeze_lock.py       regenera requirements-lock.txt (versiones exactas probadas)

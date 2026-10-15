@@ -7,6 +7,7 @@
     python scripts/dev.py test-mail tu@gmail.com   # envía un correo de prueba con esa configuración
     python scripts/dev.py create-admin             # crea un administrador (pide la contraseña sin mostrarla)
     python scripts/dev.py set-role <correo> admin  # promueve (o degrada) una cuenta existente
+    python scripts/dev.py set-password <correo>    # restablece la contraseña de una cuenta (la escribes sin que se vea)
     python scripts/dev.py migrate                  # solo aplica migraciones
     python scripts/dev.py makemigrations "mensaje" --service catalog   # migración nueva (Alembic autogenerate)
 
@@ -365,6 +366,12 @@ def _configure_set_role(parser: argparse.ArgumentParser) -> None:
 @command("set-role", "cambia el rol de una cuenta existente", needs_database=True, configure=_configure_set_role)
 def _cmd_set_role(args, env) -> None:
     flask("auth", env, "set-role", args.email, args.role)
+
+
+@command("set-password", "restablece la contraseña de una cuenta existente (se pide sin mostrarla)", needs_database=True,
+         configure=lambda parser: parser.add_argument("email"))
+def _cmd_set_password(args, env) -> None:
+    flask("auth", env, "set-password", "--email", args.email)
 
 
 def main() -> None:

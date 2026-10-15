@@ -39,6 +39,7 @@ class Event(str, enum.Enum):
     REFRESH_REUSE = "refresh_reuse"            # un token de sesión ya usado volvió a presentarse: posible robo
     ADMIN_CREATED = "admin_created"
     ROLE_CHANGED = "role_changed"
+    PASSWORD_CHANGED = "password_changed"      # noqa: secret  (nombre de evento: la clave nunca se guarda)
 
 
 def client_ip() -> str | None:

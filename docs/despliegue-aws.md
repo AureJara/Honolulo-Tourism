@@ -130,6 +130,7 @@ Te pide el correo, el nombre, el apellido y la contraseña (10 caracteres o más
 | Ver registros de un servicio | `docker compose logs -f --tail 100 web` (o `auth`, `catalog`, `caddy`…) |
 | Actualizar a lo último de GitHub | `git pull && docker compose up -d --build` |
 | Reiniciar todo | `docker compose restart` |
+| Restablecer la contraseña de una cuenta (por ejemplo la administradora) | `docker compose exec auth flask --app app:create_app set-password` (pide el correo y la contraseña nueva sin mostrarla) |
 | Respaldo de las bases de datos | `docker compose exec -T postgres pg_dumpall -U postgres > respaldo-$(date +%F).sql` |
 | Ahorrar dinero sin perder nada | En la consola: *Detener instancia* (se conserva el disco; la IP elástica sigue cobrando) |
 | Borrar todo y dejar de pagar | *Terminar instancia*, *Liberar dirección IP elástica* y eliminar el grupo de seguridad |

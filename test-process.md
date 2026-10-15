@@ -18,7 +18,7 @@ El grupo sigue un **ciclo corto y repetible**:
 
 | Nivel / Tipo | Qué cubre | Dónde / Herramienta | Cantidad actual |
 |---|---|---|---|
-| **Unitarias e integración** (caja blanca/gris) | Reglas de negocio, validación, permisos, modelo de pronóstico de afluencia, boletería, BFF contra servicios simulados, base PostgreSQL real | `libs/*/tests` y `services/*/tests` · pytest | 910 (común 178, auth 149, weather 30, forecast 88, catalog 235, web 230) |
+| **Unitarias e integración** (caja blanca/gris) | Reglas de negocio, validación, permisos, modelo de pronóstico de afluencia, boletería, BFF contra servicios simulados, base PostgreSQL real | `libs/*/tests` y `services/*/tests` · pytest | 918 (común 178, auth 157, weather 30, forecast 88, catalog 235, web 230) |
 | **Aceptación** (caja negra) | Escenarios Gherkin del spec contra el sistema en marcha, con correo y proveedor reales de desarrollo | `qa/test_e2e_acceptance.py` | 29 |
 | **Seguridad** | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, cabeceras y cookies | `qa/test_security.py` | 49 |
 | **Privacidad, límite por IP y auditoría** | Contraseñas y secretos fuera de registros, bloqueo con 429, auditoría de seguridad | `qa/test_privacy_secrets.py`, `qa/test_rate_limit_and_audit.py` | 18 y 10 |
@@ -29,7 +29,7 @@ El grupo sigue un **ciclo corto y repetible**:
 | **Interfaz y accesibilidad** | Flujos reales, teclado, móvil 375 px, WCAG 2.1 AA, comportamiento de la interfaz con jsdom | Manual + axe-core + jsdom | Revisión manual |
 | **Análisis estático** | Secretos en el código y dependencias con vulnerabilidades conocidas | `scripts/check_secrets.py` · pip-audit | En cada cambio |
 
-> **Total:** 910 pruebas unitarias e integración + 191 de extremo a extremo = **1 101 pruebas automáticas**.
+> **Total:** 918 pruebas unitarias e integración + 191 de extremo a extremo = **1 109 pruebas automáticas**.
 
 ---
 

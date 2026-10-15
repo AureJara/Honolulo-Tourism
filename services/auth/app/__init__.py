@@ -110,6 +110,35 @@ def create_app(overrides: dict | None = None) -> Flask:
         db.session.commit()
         click.echo(f"{user.email} → {role}")
 
+    @app.cli.command("set-password")
+    @click.option("--email", prompt=True)
+    def set_password(email):
+        """Restablece la contraseña de una cuenta existente (p. ej. la administradora que la olvidó). Se pide sin mostrarla.
+
+        Aplica la misma política que el registro, desbloquea la cuenta y cierra todas sus sesiones abiertas."""
+        from .emails import canonical_email, normalize_email
+        from .models import RefreshToken, User
+        from .passwords import check_password
+        email = normalize_email(email)
+        user = db.session.execute(
+            db.select(User).where(User.email_canonical == canonical_email(email))).scalar_one_or_none()
+        if user is None:
+            raise click.ClickException("Usuario no encontrado")
+        password = click.prompt("Contraseña nueva", hide_input=True, confirmation_prompt=True)
+        problem = check_password(password, min_len=app.config["PASSWORD_MIN_LENGTH"],
+                                 personal=(user.first_name, user.last_name, email.split("@")[0]))
+        if problem:
+            raise click.ClickException(problem)
+        user.password_hash = generate_password_hash(password, method=app.config["PASSWORD_HASH_METHOD"])
+        user.failed_attempts = 0
+        user.locked_until = None
+        db.session.execute(db.update(RefreshToken)
+                           .where(RefreshToken.user_id == user.id, RefreshToken.revoked_at.is_(None))
+                           .values(revoked_at=utcnow()))
+        audit.record(audit.Event.PASSWORD_CHANGED, user=user, source="cli")
+        db.session.commit()
+        click.echo(f"Contraseña actualizada: {user.email}. Sus sesiones abiertas se cerraron.")
+
     @app.cli.command("purge-audit")
     @click.option("--days", type=int, default=None, help="por defecto AUDIT_RETENTION_DAYS (180)")
     def purge_audit(days):

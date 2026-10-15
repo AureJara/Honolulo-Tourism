@@ -5,7 +5,7 @@
 | **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
 | **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
-| **Resultado** | **971 pruebas automatizadas en verde** (796 unitarias/integración + 175 de QA de extremo a extremo) y 21 defectos encontrados y corregidos (ninguno crítico) |
+| **Resultado** | **1 109 pruebas automatizadas en verde** (918 unitarias/integración + 191 de QA de extremo a extremo) y 26 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,7 +14,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 796 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 918 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
@@ -32,12 +32,12 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | Suite | Pruebas | Resultado |
 |---|---:|---|
 | Revisión de secretos en el código (`scripts/check_secrets.py`) | — | ✅ |
-| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés, configuración del correo, entorno de desarrollo, archivos del despliegue en AWS) | 168 | ✅ |
-| `auth-service` (incluye la auditoría de seguridad y el aviso de cómo sale el código) | 149 | ✅ |
+| `honolulo_common` (higiene del repositorio, secretos obligatorios, comandos de `dev.py`, registro de proveedores del clima, espera de PostgreSQL tras un cierre brusco, higiene de dependencias, arranque del PostgreSQL de pruebas, cliente HTTP entre servicios, herramienta de estrés, configuración del correo, entorno de desarrollo, archivos del despliegue en AWS) | 178 | ✅ |
+| `auth-service` (incluye la auditoría de seguridad, el aviso de cómo sale el código y el restablecimiento de contraseña) | 157 | ✅ |
 | `weather-service` | 30 | ✅ |
 | `forecast-service` | 88 | ✅ |
-| `catalog-service` | 179 | ✅ |
-| `web` (incluye el límite por IP, la pantalla de seguridad, las llamadas internas y el aviso del código) | 182 | ✅ |
+| `catalog-service` (incluye afluencia de visitantes, boletería y fotos iniciales) | 235 | ✅ |
+| `web` (incluye el límite por IP, la pantalla de seguridad, las llamadas internas, el aviso del código, la afluencia y la boletería) | 230 | ✅ |
 | QA: aceptación / seguridad / resiliencia / sesión / integridad / rendimiento | 28 / 49 / 7 / 6 / 16 / 12 | ✅ |
 | QA nuevo: opiniones y moderación / entrega de correo / privacidad y secretos | 23 / 6 / 18 | ✅ |
 
@@ -171,6 +171,15 @@ está corregido, con pruebas nuevas (+30 unitarias y de integración, +1 de extr
 
 Lo que cambió en las pruebas existentes: la de «sin sesión redirige a `/ingresar`» ahora comprueba la página pública, y las de cierre de
 sesión y de sesión revocada comprueban que se cae a esa página pública con las cookies borradas.
+
+### Cuarta ronda (2026-10-15) — primer uso real en el servidor de AWS
+
+| ID | Sev. | Hallazgo | Estado |
+|---|:-:|---|---|
+| **D26** | Media (operación) | **No había forma de restablecer una contraseña.** Una administradora que la olvidaba quedaba fuera: ni «olvidé mi contraseña» ni un comando (`create-admin` sobre una cuenta existente solo cambia el rol), y la contraseña no se puede recuperar porque solo se guarda su hash. Apareció al operar el servidor real. | ✅ `flask set-password` (y `dev.py set-password`): pide la clave sin mostrarla, aplica la política del registro, desbloquea la cuenta, cierra sus sesiones abiertas y deja el evento `password_changed` en la auditoría. 8 pruebas en `services/auth/tests/test_set_password.py` |
+
+Observación del mismo despliegue: con 1 GB de memoria (`t3.micro`) el servidor se congelaba al construir las imágenes. La guía exige
+`t3.small` como mínimo y recomienda 4 GB (`c7i-flex.large` o `t3.medium`) si se construye en el propio servidor.
 
 ## 5. Observaciones (no son defectos) y riesgos aceptados
 

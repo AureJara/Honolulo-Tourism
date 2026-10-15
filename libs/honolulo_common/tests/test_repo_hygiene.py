@@ -148,7 +148,8 @@ def test_env_file_parsing_handles_comments_quotes_and_blank_lines(tmp_path):
 # ------------------------------------------------ comandos de dev.py: se registran, no se enumeran en un if
 def test_dev_commands_are_registered_in_a_table(monkeypatch):
     import dev
-    assert {"up", "migrate", "makemigrations", "setup-mail", "test-mail", "create-admin", "set-role"} <= set(dev.COMMANDS)
+    assert {"up", "migrate", "makemigrations", "setup-mail", "test-mail", "create-admin", "set-role",
+            "set-password"} <= set(dev.COMMANDS)
     assert dev.COMMANDS["up"].needs_database and not dev.COMMANDS["setup-mail"].needs_database
 
 
