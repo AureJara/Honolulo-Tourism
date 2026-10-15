@@ -16,3 +16,5 @@ __pycache__/
 spec.borrador-previo.md
 build/
 dist/
+.DS_Store/
+.lazycurl/
