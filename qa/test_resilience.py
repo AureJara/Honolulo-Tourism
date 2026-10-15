@@ -15,7 +15,7 @@ from conftest import AUTH_URL, PASSWORD, ROOT, service_token
 sys.path.insert(0, str(ROOT / "scripts"))
 import devenv  # noqa: E402
 
-from honolulo_common.testing import search_or_fail  # noqa: E402
+from honolulo_common.testing import search_or_fail, with_database  # noqa: E402
 
 SERVICES = ROOT / "services"
 DEAD = "http://127.0.0.1:9"                      # puerto cerrado: conexión rechazada
@@ -26,7 +26,7 @@ MSG_RN08 = "No se pudo actualizar la información meteorológica. Inténtelo nue
 def _pg_base() -> str:
     import pgserver
     srv = pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None)
-    return srv.get_uri().replace("postgresql://", "postgresql+psycopg://", 1).rsplit("/", 1)[0]
+    return srv.get_uri().replace("postgresql://", "postgresql+psycopg://", 1)
 
 
 def _new_database(prefix: str) -> str:
@@ -36,7 +36,7 @@ def _new_database(prefix: str) -> str:
     uri = pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None).get_uri()
     with psycopg.connect(uri, autocommit=True) as conn:
         conn.execute(f'CREATE DATABASE "{name}"')
-    return f"{_pg_base()}/{name}"
+    return with_database(_pg_base(), name)
 
 
 def _base_env(**extra) -> dict:
@@ -99,7 +99,7 @@ def test_scenario5_provider_down_shows_last_stored_data_marked_as_previous(runni
     """Hay datos guardados pero ya vencidos y el proveedor no responde (puerto cerrado)."""
     live = requests.get("http://127.0.0.1:5002/api/v1/weather/current", headers=headers(token), timeout=20)
     assert live.status_code in (200,)                                    # asegura que existe un dato guardado
-    db = f"{_pg_base()}/weather_db"
+    db = with_database(_pg_base(), "weather_db")
     alt = running("weather", 5012, DATABASE_URL=db, WEATHER_PROVIDER_URL=DEAD, CURRENT_MAX_AGE_MIN="0",
                   ENABLE_SCHEDULER="0", WEATHER_PROVIDER_TIMEOUT_S="2")
     resp = requests.get(f"http://127.0.0.1:{alt.port}/api/v1/weather/current", headers=headers(token), timeout=20)
@@ -121,7 +121,7 @@ def test_scenario5_no_data_and_provider_down_reports_service_unavailable(running
 
 
 def test_scenario5_manual_refresh_with_provider_down_is_502_with_last_known(running, token):
-    db = f"{_pg_base()}/weather_db"
+    db = with_database(_pg_base(), "weather_db")
     alt = running("weather", 5012, DATABASE_URL=db, WEATHER_PROVIDER_URL=DEAD, CURRENT_MAX_AGE_MIN="0",
                   REFRESH_MIN_INTERVAL_S="0", ENABLE_SCHEDULER="0", WEATHER_PROVIDER_TIMEOUT_S="2")
     resp = requests.post(f"http://127.0.0.1:{alt.port}/api/v1/weather/refresh", headers=headers(token), timeout=20)
@@ -131,7 +131,7 @@ def test_scenario5_manual_refresh_with_provider_down_is_502_with_last_known(runn
 
 
 def test_forecast_keeps_serving_stored_data_when_the_provider_is_down(running, token):
-    db = f"{_pg_base()}/forecast_db"
+    db = with_database(_pg_base(), "forecast_db")
     alt = running("forecast", 5013, DATABASE_URL=db, WEATHER_PROVIDER_URL=DEAD, REFRESH_MIN_INTERVAL_S="0",
                   ENABLE_SCHEDULER="0", WEATHER_PROVIDER_TIMEOUT_S="2")
     base = f"http://127.0.0.1:{alt.port}/api/v1/weather"

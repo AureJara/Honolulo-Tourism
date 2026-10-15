@@ -1,0 +1,54 @@
+# Integración continua: revisión de secretos + las pruebas unitarias y de integración de la librería común y de cada
+# microservicio, con PostgreSQL real (embebido con pgserver) y con el mismo Python que las imágenes de Docker (3.12).
+# No ejecuta las pruebas de qa/ (necesitan el sistema completo en marcha: `python scripts/dev.py up`).
+name: Pruebas
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            requirements-lock.txt
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Secretos y pruebas
+        run: python scripts/run_tests.py
+
+  dependencias:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Buscar vulnerabilidades conocidas en las versiones fijadas
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements-lock.txt --no-deps --disable-pip

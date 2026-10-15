@@ -14,11 +14,12 @@ from conftest import ROOT
 @pytest.fixture(scope="module")
 def uri():
     import pgserver
-    return pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None).get_uri().rsplit("/", 1)[0]
+    return pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None).get_uri()
 
 
 def connect(uri, db):
-    return psycopg.connect(f"{uri}/{db}")
+    from honolulo_common.testing import with_database
+    return psycopg.connect(with_database(uri, db))
 
 
 NOW = dt.datetime.now(dt.timezone.utc)

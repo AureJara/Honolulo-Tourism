@@ -6,7 +6,7 @@
   const HN = window.HN;
   const dialog = document.getElementById('reviews-dialog');
   if (!HN || !dialog || typeof dialog.showModal !== 'function') return;
-  const { api, esc, icon, toast, starsHTML, ratingLineHTML, plural } = HN;
+  const { api, esc, icon, toast, starsHTML, ratingLineHTML, plural, authed } = HN;
 
   const main = document.getElementById('contenido');
   const isAdmin = !!main && main.dataset.role === 'admin';
@@ -27,7 +27,7 @@
     try {
       const [list, mine] = await Promise.all([
         api(`${base()}?limit=${PAGE}&offset=${reset ? 0 : st.items.length}`),
-        reset ? api(`${base()}/mine`) : Promise.resolve({ review: st.mine }),
+        reset && authed ? api(`${base()}/mine`) : Promise.resolve({ review: st.mine }),   // sin sesión no hay «mi opinión»
       ]);
       if (token !== st.token) return;                       // llegó tarde: se abrió otro lugar
       st.items = reset ? list.items : st.items.concat(list.items);
@@ -62,7 +62,16 @@
       <div class="flex flex-col gap-1.5" role="group" aria-label="Cuántas personas dieron cada puntuación">${rows}</div></div>`;
   }
 
+  // Escenario 9: quien no tiene sesión puede leer las opiniones, pero no puntuar ni comentar.
+  function loginPromptHTML() {
+    return `<div id="review-login-prompt" class="mt-6 p-4 rounded-xl border border-outline-variant/40 bg-surface-container-low">
+      <h3 class="font-headline text-lg font-bold">Inicia sesión para opinar</h3>
+      <p class="mt-1 text-sm text-on-surface-variant">Puedes leer todas las opiniones. Para puntuar con estrellas o comentar necesitas una cuenta registrada.</p>
+      <div class="mt-3 flex flex-wrap gap-3"><a href="/ingresar?next=%2F" class="${btnPrimary}">Ingresar</a><a href="/registro" class="${btnGhost}">Crear cuenta</a></div></div>`;
+  }
+
   function formHTML() {
+    if (!authed) return loginPromptHTML();
     const seed = st.draft || (st.mine ? { rating: st.mine.rating, comment: st.mine.comment || '' } : { rating: 0, comment: '' });
     const stars = [1, 2, 3, 4, 5].map((n) => `<input type="radio" id="rv-star-${n}" name="rating" value="${n}" class="sr-only peer" ${seed.rating === n ? 'checked' : ''}>
       <label for="rv-star-${n}" class="cursor-pointer p-0.5 rounded peer-focus-visible:ring-2 peer-focus-visible:ring-primary">${icon('star', 'text-[34px] text-outline-variant')}<span class="sr-only">${n} ${n === 1 ? 'estrella' : 'estrellas'}</span></label>`).join('');

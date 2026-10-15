@@ -239,6 +239,9 @@ def cookies():
 
 
 @bp.get("/")
-@login_required
 def index():
-    return render_template("index.html", user=g.user, csrf_token=csrf_token())
+    """Pantalla principal. Es pública (Escenario 9): cualquier visitante ve las cascadas, sus fotos y las opiniones. El
+    clima y el pronóstico (RF01) solo se muestran, y solo se piden a la API, con una sesión activa; puntuar y comentar
+    también exigen cuenta (lo vuelve a comprobar el catálogo)."""
+    user = current_user()
+    return render_template("index.html", user=user, csrf_token=csrf_token(), public_nav=user is None)

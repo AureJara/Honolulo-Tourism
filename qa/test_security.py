@@ -92,7 +92,8 @@ def test_web_logout_ends_the_browser_session(member):
     assert w.get("/").status_code == 200
     out = w.form("/salir", {}, csrf_path="/")
     assert out.status_code == 302
-    assert w.get("/").status_code == 302                              # ya no hay sesión
+    home = w.get("/")                                                 # ya no hay sesión: la página pública, sin el clima
+    assert home.status_code == 200 and 'data-auth="0"' in home.text and 'id="current-card"' not in home.text
     assert w.api("GET", "/api/v1/weather/current").status_code == 401
 
 
@@ -224,8 +225,9 @@ def _purge_place(place_id: str) -> None:
     import psycopg
     import pgserver
     from conftest import ROOT
-    uri = pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None).get_uri().rsplit("/", 1)[0]
-    with psycopg.connect(uri + "/catalog_db", autocommit=True) as conn:
+    from honolulo_common.testing import with_database
+    uri = pgserver.get_server(str(ROOT / ".pgdata"), cleanup_mode=None).get_uri()
+    with psycopg.connect(with_database(uri, "catalog_db"), autocommit=True) as conn:
         keys = [r[0] for r in conn.execute("select replace(id::text, '-', '') from place_photos where place_id = %s", (place_id,))]
         conn.execute("delete from places where id = %s", (place_id,))
     media = ROOT / ".media"

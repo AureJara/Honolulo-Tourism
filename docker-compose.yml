@@ -1,7 +1,9 @@
 # Honolulo — microservicios Flask + PostgreSQL.
 #   cp .env.example .env   (y completar los secretos)
 #   docker compose up --build
-# Solo el servicio `web` se publica (http://localhost:8000); el resto vive en la red interna.
+# Solo el servicio `web` se publica, y solo en esta máquina (http://localhost:8000); el resto vive en la red interna.
+# Para abrirlo a otros equipos de la red local, define WEB_BIND=0.0.0.0 en el .env. Con el despliegue de deploy/aws NO lo hagas:
+# Caddy llega a `web` por la red interna de Docker, y así nadie puede saltarse a Caddy ni falsificar X-Forwarded-For.
 
 x-base-env: &base-env
   APP_ENV: ${APP_ENV:-production}
@@ -16,7 +18,7 @@ x-jwt-env: &jwt-env
 services:
   web:
     build: { context: ., dockerfile: services/web/Dockerfile }
-    ports: ["8000:8000"]
+    ports: ["${WEB_BIND:-127.0.0.1}:8000:8000"]
     environment:
       <<: *base-env
       WEB_SECRET_KEY: ${WEB_SECRET_KEY:?defina WEB_SECRET_KEY}

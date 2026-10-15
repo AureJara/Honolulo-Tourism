@@ -128,7 +128,9 @@ def create_app(overrides: dict | None = None) -> Flask:
     from .api import bp as api_bp
     from .pages import bp as pages_bp
     from .reviews_api import bp as reviews_api_bp
-    for blueprint in (api_bp, reviews_api_bp, pages_bp, admin_bp, admin_reviews_bp, admin_security_bp):
+    from .visits_api import bp as visits_api_bp
+    from .tickets_api import bp as tickets_api_bp
+    for blueprint in (api_bp, reviews_api_bp, visits_api_bp, tickets_api_bp, pages_bp, admin_bp, admin_reviews_bp, admin_security_bp):
         app.register_blueprint(blueprint)
 
     @app.get("/healthz")

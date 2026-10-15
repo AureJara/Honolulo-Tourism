@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
+from flask import current_app
+
 from .extensions import db
-from .models import Place
+from .images import process_image
+from .models import Place, PlacePhoto
 
 SEED_PLACES = [
     {"slug": "catarata-velo-de-las-ninfas", "name": "Catarata Velo de las Ninfas", "difficulty": "moderate",
@@ -34,3 +39,49 @@ def seed_places() -> int:
         created += 1
     db.session.commit()
     return created
+
+
+# Fotos que se cargan con los datos iniciales: slug -> (archivo en ``seed_media/``, texto alternativo).
+SEED_PHOTOS = {
+    "catarata-velo-de-las-ninfas": (
+        "velo-de-las-ninfas.jpg",
+        "Catarata Velo de las Ninfas: caída de agua blanca entre rocas cubiertas de musgo y vegetación "
+        "selvática, que termina en una poza de aguas verdes."),
+    "cascada-san-miguel": (
+        "cascada-san-miguel.jpg",
+        "Cascada San Miguel: salto de agua sobre una pared de roca con musgo, rodeado de selva densa, que baja "
+        "en rápidos hacia el río."),
+    "catarata-santa-carmen": (
+        "catarata-santa-carmen.jpg",
+        "Catarata Santa Carmen: torrente blanco entre paredes de roca con musgo que cae a una poza de aguas "
+        "esmeralda, con una gran roca clara en primer plano."),
+    "catarata-gloriapata": (
+        "catarata-gloriapata.jpg",
+        "Catarata Gloriapata: cascada delgada que cae entre rocas cubiertas de musgo y helechos hacia una poza "
+        "de aguas turquesa."),
+}
+SEED_MEDIA = Path(__file__).resolve().parent / "seed_media"
+
+
+def seed_photos() -> int:
+    """Asigna la foto inicial a los lugares sembrados que aún no tienen ninguna. Idempotente.
+
+    No toca los lugares con fotos: lo que el administrador haya subido o cambiado no se sobrescribe.
+    """
+    added = 0
+    storage = current_app.extensions["storage"]
+    for slug, (filename, alt_text) in SEED_PHOTOS.items():
+        place = db.session.execute(db.select(Place).where(Place.slug == slug)).scalar_one_or_none()
+        if place is None or place.photos:
+            continue
+        processed = process_image((SEED_MEDIA / filename).read_bytes(), 10 * 1024 * 1024)
+        photo = PlacePhoto(place_id=place.id, alt_text=alt_text, is_cover=True, sort_order=0,
+                           width=processed.width, height=processed.height, bytes_full=len(processed.full),
+                           uploaded_by=None)
+        db.session.add(photo)
+        db.session.flush()
+        storage.write(photo.key_full, processed.full)
+        storage.write(photo.key_thumb, processed.thumb)
+        db.session.commit()
+        added += 1
+    return added

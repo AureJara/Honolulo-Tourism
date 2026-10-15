@@ -108,6 +108,18 @@ def _server_url() -> str:
     return _embedded.get_uri()
 
 
+def with_database(url: str, name: str) -> str:
+    """Cambia la base de datos de una URL de PostgreSQL conservando el resto (usuario, host y parámetros).
+
+    En Linux ``pgserver`` entrega la URL con un socket Unix: ``postgresql://postgres:@/postgres?host=/ruta/del/socket``.
+    El nombre de la base está antes de ``?``; cortar por la última ``/`` de toda la URL se llevaba el ``?host=…`` (y la
+    conexión fallaba) porque la ruta del socket también contiene barras.
+    """
+    base, sep, query = url.partition("?")
+    head, _, _ = base.rpartition("/")
+    return f"{head}/{name}{sep}{query}"
+
+
 def create_test_database(prefix: str) -> str:
     """Crea una base vacía y devuelve su URL SQLAlchemy (driver psycopg 3)."""
     base = _server_url().replace("postgresql://", "postgresql+psycopg://", 1)
@@ -115,8 +127,7 @@ def create_test_database(prefix: str) -> str:
     name = f"{prefix}_{uuid.uuid4().hex[:8]}"
     with psycopg.connect(plain, autocommit=True) as conn:
         conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
-    head, _, _ = base.rpartition("/")
-    return f"{head}/{name}"
+    return with_database(base, name)
 
 
 class FakeSmtpServer:

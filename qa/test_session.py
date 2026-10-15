@@ -93,5 +93,6 @@ def test_revoked_refresh_token_forces_a_clean_logout_in_the_browser(member):
     drop_cookie(w, "hn_access")
     resp = w.api("GET", "/api/v1/weather/current")
     assert resp.status_code == 401
-    page = w.get("/")
-    assert page.status_code == 302 and page.headers["Location"].startswith("/ingresar")
+    page = w.get("/")                          # sesión muerta: cae a la página pública (sin el clima) y se borran las cookies
+    assert page.status_code == 200 and 'data-auth="0"' in page.text and 'id="current-card"' not in page.text
+    assert not w.s.cookies.get("hn_access")

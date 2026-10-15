@@ -92,7 +92,7 @@ flowchart TD
 ### Principios y patrones arquitectónicos
 
 1. **Patrón API Gateway y Perímetro Seguro (`web`)**:
-   - Es el único punto de entrada público expuesto (`:8000`). **En Docker Compose** los microservicios de backend no publican puertos al host; en desarrollo local (`scripts/dev.py`) escuchan solo en `127.0.0.1`.
+   - Es el único punto de entrada público expuesto (`:8000`; en Docker Compose se publica solo en `127.0.0.1`, ver `WEB_BIND`, para que detrás de Caddy nadie pueda saltárselo). **En Docker Compose** los microservicios de backend no publican puertos al host; en desarrollo local (`scripts/dev.py`) escuchan solo en `127.0.0.1`.
    - El cliente se comunica exclusivamente mediante cookies de sesión `HttpOnly` y protección contra CSRF con token dedicado.
    - Aplica el principio de menor privilegio: `web` **no conoce** la clave secreta `JWT_SECRET_KEY`. Su rol es intermediar peticiones, inyectar el token Bearer recibido de `auth-service` hacia los microservicios protegidos y orquestar la rotación transparente de credenciales.
 
@@ -184,10 +184,13 @@ de desarrollo): se verificaron con pruebas estáticas y ejecutando el script, y 
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 796 pruebas: común 168 · auth 149 · weather 30 · forecast 88 · catalog 179 · web 182
+python scripts/run_tests.py            # revisión de secretos + 826 pruebas: común 178 · auth 149 · weather 30 · forecast 88 · catalog 179 · web 202
 python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
-cd qa && python -m pytest -q           # 175 pruebas de QA de extremo a extremo contra el sistema corriendo
+cd qa && python -m pytest -q           # 176 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
+
+La integración continua (`.github/workflows/tests.yml`, GitHub Actions con Python 3.12) ejecuta `scripts/run_tests.py` y
+`pip-audit` en cada `push` a `main` y en cada *pull request*. No corre `qa/`, que necesita el sistema completo en marcha.
 
 Las suites usan **PostgreSQL real** (no SQLite): `TEST_DATABASE_URL` si existe, o uno embebido con `pgserver`. Las
 unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[informe de QA](qa/QA-REPORT.md)**
@@ -199,6 +202,9 @@ unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[in
   sube/elimina fotos y elige la portada. Las fotos se validan por contenido (no por extensión), se re-codifican a WebP
   sin metadatos (EXIF/GPS), con límites de tamaño y de píxeles; cada cambio queda en el historial con autor. El
   visitante ve los lugares en la pantalla principal.
+- **Esc. 9 — visitante sin cuenta:** la pantalla principal (`/`) es pública. Sin sesión se ven las cascadas, sus fotos y las
+  opiniones; el clima, el pronóstico y el historial (RF01) no se muestran ni se piden a la API, y en la ventana de opiniones
+  aparece «Inicia sesión para opinar» en lugar del formulario. Puntuar y comentar exigen sesión (lo comprueba el catálogo).
 - **Esc. 7 — correo con código y consentimiento:** el registro crea la cuenta sin sesión; se envía un código de 6 dígitos
   (vence en 10 min, 5 intentos, reenvío cada 60 s y máx. 5 por hora) y solo al confirmarlo se inicia la sesión. Es
   obligatorio aceptar la política de privacidad (`/politica-de-privacidad`); se guarda la fecha y la versión. Las
@@ -206,6 +212,24 @@ unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[in
   Google» (OAuth): «cuentas de Gmail» se interpretó como correos confirmados por código.
 - **Esc. 8 — datos reales:** nombre y apellido obligatorios y validados (se rechazan «Test», «aaaa», dígitos, etc.).
   No se puede verificar que un nombre sea real; la titularidad del correo sí se comprueba con el código.
+
+## Afluencia de visitantes (historial y predicción)
+
+Sección «Afluencia de visitantes» (enlace «Afluencia» del menú, para usuarios con sesión): visitas por **día, mes y año** por lugar o para todo Honolulo, con KPIs, historial y pronóstico con intervalo de confianza del 95 %.
+
+- **Modelo** (`services/catalog/app/visit_model.py`, solo biblioteca estándar): Holt-Winters multiplicativo con tendencia amortiguada; si hay menos de 24 meses de datos usa la estacionalidad regional del BCRP. El pronóstico diario combina perfil semanal, estacionalidad mensual, feriados peruanos y, opcionalmente, la probabilidad de lluvia del servicio de pronóstico (efecto **supuesto** de −30 % con lluvia segura). Se informa el error de validación (MAPE).
+- **Datos**: tabla `place_visits` (migración `c8d2e5f1a4b6`). El administrador registra visitas desde la propia sección. Referencia regional: serie BCRP RD13362DM (arribos a hospedajes de Huánuco, 2015-2019); es contexto de estacionalidad, **no** un conteo de visitas a Honolulo.
+- **Datos de demostración**: con `SEED_DEMO_VISITS=1` (`scripts/dev.py` lo activa) se generan 3 años de visitas ficticias, etiquetadas «Datos de demostración». Un registro real reemplaza al de demostración de ese día; «Quitar los datos de demostración» o `flask clear-demo-visits` los elimina. En un despliegue real déjalo en 0.
+
+## Boletería (compra de boletos)
+
+Sección «Compra tu boleto» de la página principal (enlace «Boletería» del menú). La entrada cuesta **S/ 5.00 por persona**; el visitante sin sesión ve el precio y una invitación a ingresar, y quien tiene sesión puede comprar.
+
+- **Compra**: lugar, fecha de la visita (desde hoy hasta 90 días), personas (1 a 20) y medio de pago (Yape, Plin, tarjeta o efectivo en puerta). El total lo calcula siempre el servidor (`services/catalog/app/tickets.py`, `PRICE_CENTS`); el navegador no puede fijar el precio. Cada compra genera un código único `HN-XXXXXXXX`.
+- **Mis boletos**: lista de las compras propias, con estado (válido, usado, anulado) y anulación mientras la fecha sea futura.
+- **Puerta y ventas (administrador)**: validar el código el día de la visita (cada boleto se usa una sola vez) y ver ventas de hoy, últimos 30 días, próximos 7 días y por lugar.
+- **Pago simulado**: no se cobra dinero ni se piden datos de tarjeta; se rotula «Pago simulado». Para cobrar de verdad hay que contratar una pasarela (p. ej. Niubiz o Izipay) e implementar `_charge` en `tickets.py`.
+- **API** (BFF `services/web/app/tickets_api.py`): `GET /api/v1/tickets/config` (público), `POST /api/v1/tickets`, `GET /api/v1/tickets/mine`, `POST /api/v1/tickets/cancel`, `POST /api/v1/admin/tickets/validate` y `GET /api/v1/admin/tickets/summary` (administrador). Tabla `ticket_orders` (migración `e5a7b3c9d1f2`).
 
 ## Opiniones, moderación, políticas y seguridad
 

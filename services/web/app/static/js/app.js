@@ -58,6 +58,9 @@
     return data;
   }
 
+  // Escenario 9: un visitante sin cuenta solo ve los lugares; el clima y el pronóstico exigen sesión (RF01).
+  const authed = (($('#contenido') || {}).dataset || {}).auth === '1';
+
   const state = {
     month: todayISO().slice(0, 7), selected: todayISO(), days: {}, current: null, dayToken: 0, calToken: 0,
     hist: { page: 1, total: 0, pageSize: 10, loaded: false },
@@ -390,10 +393,10 @@
       ? `<img src="${esc(p.cover.thumb_url)}" srcset="${esc(p.cover.thumb_url)} ${Number(p.cover.thumb_width) || 640}w, ${esc(p.cover.url)} ${Number(p.cover.width) || 1600}w" sizes="(min-width: 768px) 50vw, 100vw" alt="${esc(p.cover.alt)}" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105">`
       : `<div class="w-full h-full flex flex-col items-center justify-center gap-1 bg-gradient-to-br from-primary-fixed to-surface-container text-primary">${icon('landscape', 'text-5xl')}<span class="text-xs font-headline font-semibold">Foto próximamente</span></div>`;
     const extras = (p.photos || []).filter((ph) => !ph.is_cover).slice(0, 3)
-      .map((ph) => `<img src="${esc(ph.thumb_url)}" alt="${esc(ph.alt)}" loading="lazy" decoding="async" width="96" height="64" class="w-24 h-16 object-cover rounded-lg border border-outline-variant/30">`).join('');
+      .map((ph) => `<button type="button" data-open-photo="${esc(ph.url)}" data-photo-alt="${esc(ph.alt)}" data-photo-title="${esc(p.name)}" aria-label="Ver foto: ${esc(ph.alt)}" class="cursor-zoom-in"><img src="${esc(ph.thumb_url)}" alt="${esc(ph.alt)}" loading="lazy" decoding="async" width="96" height="64" class="w-24 h-16 object-cover rounded-lg border border-outline-variant/30"></button>`).join('');
     const spec = (label, value) => value ? `<div><dt class="text-[11px] text-tertiary font-medium">${label}</dt><dd class="text-sm font-semibold text-on-surface mt-0.5">${esc(value)}</dd></div>` : '';
     return `<article class="group bg-surface-container-lowest rounded-2xl overflow-hidden border border-primary/15 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col">
-      <div class="h-64 w-full overflow-hidden bg-surface-container">${cover}</div>
+      <div class="h-64 w-full overflow-hidden bg-surface-container relative">${p.cover ? `<button type="button" data-open-photo="${esc(p.cover.url)}" data-photo-alt="${esc(p.cover.alt)}" data-photo-title="${esc(p.name)}" aria-label="Ver la foto completa de ${esc(p.name)}" class="block w-full h-full cursor-zoom-in">${cover}<span class="absolute bottom-3 right-3 inline-flex items-center gap-1 rounded-full bg-black/55 text-white text-xs font-semibold px-3 py-1.5 backdrop-blur-sm pointer-events-none">${icon('zoom_in', 'text-[16px]')}Ver completa</span></button>` : cover}</div>
       <div class="p-6 flex flex-col gap-4 flex-1">
         <h3 class="font-headline text-2xl font-bold text-primary">${esc(p.name)}</h3>
         <div class="flex flex-wrap items-center gap-x-2 gap-y-1 -mt-2" data-rating-for="${esc(p.slug)}">${ratingLineHTML(p.rating)}</div>
@@ -421,7 +424,28 @@
   }
 
   // ------------------------------------------------------------------ inicio
+  // Visor de fotos: abre la imagen completa (sin recortar) en un cuadro de diálogo.
+  function bindPhotoViewer() {
+    const dlg = $('#photo-dialog');
+    const grid = $('#places-grid');
+    if (!dlg || !grid || typeof dlg.showModal !== 'function') return;
+    grid.addEventListener('click', (ev) => {
+      const b = ev.target.closest('[data-open-photo]');
+      if (!b) return;
+      const img = $('#photo-img');
+      img.src = b.dataset.openPhoto;
+      img.alt = b.dataset.photoAlt || '';
+      $('#photo-title').textContent = b.dataset.photoTitle || '';
+      $('#photo-caption').textContent = b.dataset.photoAlt || '';
+      dlg.showModal();
+    });
+    dlg.addEventListener('click', (ev) => { if (ev.target === dlg || ev.target.closest('[data-photo-close]')) dlg.close(); });
+    dlg.addEventListener('close', () => { $('#photo-img').removeAttribute('src'); });
+  }
+
   function init() {
+    bindPhotoViewer();
+    if (!authed) { loadPlaces(); return; }
     renderCalendar();
     $('#refresh-btn').addEventListener('click', onRefresh);
     $('#cal-prev').addEventListener('click', () => shiftMonth(-1));
@@ -447,7 +471,7 @@
   }
 
   // Utilidades compartidas con reviews.js (opiniones y puntuación).
-  window.HN = { api, esc, icon, toast, starsHTML, ratingLineHTML, plural };
+  window.HN = { api, esc, icon, toast, starsHTML, ratingLineHTML, plural, authed };
 
   init();
 })();

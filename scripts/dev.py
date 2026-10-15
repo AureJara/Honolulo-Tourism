@@ -30,6 +30,15 @@ from typing import Callable
 
 import devenv  # noqa: E402  (mismo directorio: scripts/)
 
+
+def with_database(url: str, name: str) -> str:
+    """Cambia la base de una URL de PostgreSQL sin perder ``?host=/ruta/del/socket`` (el socket Unix de Linux/macOS).
+
+    Es la misma lógica de ``honolulo_common.testing.with_database``; se repite aquí porque este script puede arrancar con un
+    Python que aún no tiene instalada la librería del proyecto."""
+    base, sep, query = url.partition("?")
+    return f"{base.rpartition('/')[0]}/{name}{sep}{query}"
+
 ROOT = Path(__file__).resolve().parent.parent
 PORTS = {"auth": 5001, "weather": 5002, "forecast": 5003, "catalog": 5004, "web": 8000}
 DBS = {"auth": "auth_db", "weather": "weather_db", "forecast": "forecast_db", "catalog": "catalog_db"}
@@ -108,7 +117,7 @@ def mail_banner(env: dict) -> str:
 
 
 def base_env(pg_uri: str, mail_mode: str = "auto") -> dict:
-    sqla_base = pg_uri.replace("postgresql://", "postgresql+psycopg://", 1).rsplit("/", 1)[0]
+    sqla_url = pg_uri.replace("postgresql://", "postgresql+psycopg://", 1)
     env = local_env(mail_mode)
     env.update({
         "APP_ENV": "development",
@@ -120,14 +129,15 @@ def base_env(pg_uri: str, mail_mode: str = "auto") -> dict:
         "MEDIA_ROOT": env.get("MEDIA_ROOT", str(ROOT / ".media")),
         "PYTHONUTF8": "1",
     })
-    env["_SQLA_BASE"] = sqla_base
+    env.setdefault("SEED_DEMO_VISITS", "1")     # desarrollo: visitas de DEMOSTRACIÓN (rotuladas como tales en la pantalla)
+    env["_SQLA_BASE"] = sqla_url          # URL completa del servidor; ``with_database`` cambia solo el nombre de la base
     return env
 
 
 def service_env(env: dict, service: str) -> dict:
     out = dict(env)
     if service in DBS and "_SQLA_BASE" in env:      # sin PostgreSQL levantado (p. ej. ``test-mail``) se usa el valor por defecto
-        out["DATABASE_URL"] = f"{env['_SQLA_BASE']}/{DBS[service]}"
+        out["DATABASE_URL"] = with_database(env["_SQLA_BASE"], DBS[service])
     return out
 
 
