@@ -273,3 +273,39 @@ def test_media_supports_conditional_requests(seeded, admin, place_id):
     first = seeded.get(photo["url"])
     second = seeded.get(photo["url"], headers={"If-None-Match": first.headers["ETag"]})
     assert second.status_code == 304
+
+
+def test_seed_photos_gives_the_seeded_places_their_cover_once(app, client):
+    from app.extensions import db
+    from app.models import Place
+    from app.seed import seed_photos, seed_places
+
+    with app.app_context():
+        seed_places()
+        assert seed_photos() == 4
+        assert seed_photos() == 0                     # idempotente
+        place = db.session.execute(db.select(Place).where(Place.slug == "catarata-velo-de-las-ninfas")).scalar_one()
+        assert len(place.photos) == 1 and place.photos[0].is_cover
+        assert app.extensions["storage"].exists(place.photos[0].key_full)
+        with_photo = {"catarata-velo-de-las-ninfas", "cascada-san-miguel", "catarata-santa-carmen",
+                      "catarata-gloriapata"}
+        others = db.session.execute(db.select(Place).where(Place.slug.not_in(with_photo))).scalars()
+        assert all(not p.photos for p in others)
+    cover = client.get("/api/v1/places/catarata-velo-de-las-ninfas").get_json()["cover"]
+    assert cover["url"].startswith("/media/") and cover["alt"]
+    assert client.get(cover["url"]).status_code == 200
+
+
+def test_seed_photos_does_not_override_an_admin_upload(app, client):
+    from app.extensions import db
+    from app.models import Place, PlacePhoto
+    from app.seed import seed_photos, seed_places
+
+    with app.app_context():
+        seed_places()
+        place = db.session.execute(db.select(Place).where(Place.slug == "catarata-velo-de-las-ninfas")).scalar_one()
+        db.session.add(PlacePhoto(place_id=place.id, alt_text="Foto del administrador", is_cover=True, width=640,
+                                  height=480, bytes_full=1))
+        db.session.commit()
+        assert seed_photos() == 3                     # las otras tres cascadas: Velo de las Ninfas conserva la del admin
+        assert len(place.photos) == 1 and place.photos[0].alt_text == "Foto del administrador"

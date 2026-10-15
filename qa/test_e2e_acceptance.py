@@ -1,4 +1,4 @@
-"""Criterios de aceptación del spec (Escenarios 1–8) ejecutados contra el sistema real."""
+"""Criterios de aceptación del spec (Escenarios 1–9) ejecutados contra el sistema real."""
 
 import re
 import time
@@ -12,8 +12,10 @@ from conftest import (BASE, CATALOG_URL, Web, code_from_mail, jpeg, latest_mail,
 
 # ====================================================== RF01 · Autenticación
 def test_rf01_anonymous_users_cannot_reach_the_weather_module(web):
-    page = web.get("/")
-    assert page.status_code == 302 and page.headers["Location"].startswith("/ingresar")
+    page = web.get("/")                       # la página principal es pública (Escenario 9), pero sin el módulo del clima
+    assert page.status_code == 200 and 'id="visitor-card"' in page.text
+    for hidden in ("Actualizar clima", 'id="current-card"', 'id="calendario"', 'id="historial"'):
+        assert hidden not in page.text, hidden
     for path in ("/api/v1/weather/current", "/api/v1/weather/forecast?date=2026-10-01",
                  "/api/v1/weather/calendar?month=2026-10", "/api/v1/weather/evaluation/1",
                  "/api/v1/weather/history", "/api/v1/weather/location"):
@@ -254,3 +256,26 @@ def test_rf08_history_records_have_the_required_fields(member_web):
                   "rain_probability", "wind_speed", "cloud_cover", "condition"):
         assert field in record, field
     assert re.match(r"\d{4}-\d\d-\d\d$", record["date"]) and re.match(r"\d\d:\d\d$", record["time"])
+
+
+# ======================================== Escenario 9 · visitante sin cuenta
+def test_scenario9_visitors_see_places_and_reviews_but_cannot_rate_or_comment(web, member_web):
+    page = web.get("/")
+    assert page.status_code == 200
+    assert 'id="places-grid"' in page.text and "Nuestras Majestuosas Cascadas" in page.text and 'data-auth="0"' in page.text
+    assert "Ingresar" in page.text and "Crear cuenta" in page.text
+
+    places = web.api("GET", "/api/v1/places")
+    assert places.status_code == 200 and places.json()["items"]
+    slug = places.json()["items"][0]["slug"]
+    listing = web.api("GET", f"/api/v1/places/{slug}/reviews")
+    assert listing.status_code == 200 and "summary" in listing.json()          # leer es público
+
+    for method in ("GET", "PUT", "DELETE"):                                     # puntuar y comentar exigen sesión
+        resp = web.api(method, f"/api/v1/places/{slug}/reviews/mine", json={"rating": 5, "comment": "Hermosa"})
+        assert resp.status_code == 401 and resp.json()["code"] == "AUTH_REQUIRED", method
+
+    # con sesión, la misma página sí trae el módulo del clima y el formulario no se bloquea
+    member_page = member_web.get("/")
+    assert member_page.status_code == 200 and 'data-auth="1"' in member_page.text
+    assert 'id="current-card"' in member_page.text and 'id="visitor-card"' not in member_page.text

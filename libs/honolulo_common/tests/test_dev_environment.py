@@ -23,8 +23,8 @@ def test_service_env_without_postgres_does_not_need_the_database_url():
 
 
 def test_service_env_with_postgres_points_each_service_to_its_own_database():
-    env = {"_SQLA_BASE": "postgresql+psycopg://postgres@127.0.0.1:5555"}
-    assert dev.service_env(env, "auth")["DATABASE_URL"].endswith("/auth_db")
+    env = {"_SQLA_BASE": "postgresql+psycopg://postgres@127.0.0.1:5555/postgres"}
+    assert dev.service_env(env, "auth")["DATABASE_URL"] == "postgresql+psycopg://postgres@127.0.0.1:5555/auth_db"
     assert dev.service_env(env, "catalog")["DATABASE_URL"].endswith("/catalog_db")
     assert "DATABASE_URL" not in dev.service_env(env, "web")
 

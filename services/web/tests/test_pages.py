@@ -3,10 +3,11 @@ import requests
 from conftest import AUTH, USER, cookie_header, csrf_from, login_cookies, tokens
 
 
-def test_home_requires_session_and_redirects_to_login(client):
+def test_home_is_public_and_asks_no_service_for_a_visitor(client, mocked):
+    """Escenario 9: sin sesión se ve la página (lugares y opiniones); no se consulta a ningún servicio."""
     resp = client.get("/")
-    assert resp.status_code == 302
-    assert resp.headers["Location"] == "/ingresar?next=/"
+    assert resp.status_code == 200 and "Nuestras Majestuosas Cascadas" in resp.get_data(as_text=True)
+    assert len(mocked.calls) == 0
 
 
 def test_login_page_sets_csrf_cookie_and_renders_form(client):
@@ -84,12 +85,12 @@ def test_home_renews_expired_access_token_with_refresh_token(client, mocked):
     assert mocked.calls[-1].request.headers["Authorization"] == "Bearer new-acc"
 
 
-def test_home_with_dead_session_redirects_and_clears_cookies(client, mocked):
+def test_home_with_dead_session_shows_the_visitor_page_and_clears_cookies(client, mocked):
     mocked.get(f"{AUTH}/api/v1/auth/me", status=401, json={"code": "TOKEN_EXPIRED"})
     mocked.post(f"{AUTH}/api/v1/auth/refresh", status=401, json={"code": "INVALID_REFRESH_TOKEN"})
     login_cookies(client)
     resp = client.get("/")
-    assert resp.status_code == 302 and resp.headers["Location"].startswith("/ingresar")
+    assert resp.status_code == 200 and 'data-auth="0"' in resp.get_data(as_text=True)
     assert "Max-Age=0" in cookie_header(resp, "hn_access") or "Expires=" in cookie_header(resp, "hn_access")
 
 

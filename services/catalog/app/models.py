@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import JSONB
@@ -127,3 +127,59 @@ class PlaceReview(db.Model):
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
     updated_at: Mapped[datetime] = mapped_column(
         sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now())
+
+
+class PlaceVisit(db.Model):
+    """Visitantes de un lugar en un día. ``source``: ``registro`` (anotado por el personal) o ``demo`` (datos de demostración)."""
+
+    __tablename__ = "place_visits"
+    __table_args__ = (
+        sa.UniqueConstraint("place_id", "visit_date", name="uq_visit_place_day"),
+        sa.CheckConstraint("visitors BETWEEN 0 AND 50000", name="ck_visits_range"),
+        sa.CheckConstraint("source IN ('registro','demo')", name="ck_visits_source"),
+        sa.Index("ix_place_visits_date", "visit_date"),
+    )
+
+    id: Mapped[int] = mapped_column(sa.BigInteger().with_variant(sa.Integer(), "sqlite"), primary_key=True,
+                                    autoincrement=True)
+    place_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("places.id", ondelete="CASCADE"), nullable=False)
+    visit_date: Mapped[date] = mapped_column(sa.Date, nullable=False)
+    visitors: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    source: Mapped[str] = mapped_column(sa.String(10), nullable=False, default="registro", server_default="registro")
+    recorded_by: Mapped[str | None] = mapped_column(sa.String(64))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now())
+
+
+class TicketOrder(db.Model):
+    """Compra de boletos de entrada a un lugar. ``status``: ``pagado`` → ``usado`` (validado en la puerta) o ``anulado``.
+
+    El pago es SIMULADO: no se guardan datos de tarjeta ni se contacta a ninguna pasarela real.
+    """
+
+    __tablename__ = "ticket_orders"
+    __table_args__ = (
+        sa.CheckConstraint("quantity BETWEEN 1 AND 20", name="ck_tickets_quantity"),
+        sa.CheckConstraint("status IN ('pagado','usado','anulado')", name="ck_tickets_status"),
+        sa.CheckConstraint("payment_method IN ('yape','plin','tarjeta','efectivo')", name="ck_tickets_method"),
+        sa.CheckConstraint("unit_price_cents >= 0 AND total_cents = unit_price_cents * quantity", name="ck_tickets_total"),
+        sa.Index("ix_ticket_orders_user", "user_id", "created_at"),
+        sa.Index("ix_ticket_orders_date", "visit_date"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, primary_key=True, default=uuid.uuid4)
+    code: Mapped[str] = mapped_column(sa.String(16), nullable=False, unique=True)
+    place_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid, sa.ForeignKey("places.id", ondelete="RESTRICT"), nullable=False)
+    user_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    buyer_name: Mapped[str] = mapped_column(sa.String(100), nullable=False)
+    visit_date: Mapped[date] = mapped_column(sa.Date, nullable=False)
+    quantity: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    unit_price_cents: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    total_cents: Mapped[int] = mapped_column(sa.Integer, nullable=False)
+    payment_method: Mapped[str] = mapped_column(sa.String(10), nullable=False)
+    status: Mapped[str] = mapped_column(sa.String(10), nullable=False, default="pagado", server_default="pagado")
+    used_at: Mapped[datetime | None] = mapped_column(sa.DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now())

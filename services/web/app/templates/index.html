@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Planifica tu visita — Clima y pronóstico de Honolulo{% endblock %}
 {% block content %}
-<main id="contenido" class="pt-24 pb-20" data-role="{{ user.role }}">
+<main id="contenido" class="pt-24 pb-20" data-role="{{ user.role if user else 'visitor' }}" data-auth="{{ '1' if user else '0' }}">
   <div class="max-w-7xl mx-auto px-6 md:px-10">
 
     <!-- Banner + clima actual (RF02, RF03, RF06, RF07) -->
@@ -21,6 +21,7 @@
           </p>
         </div>
 
+        {% if user %}
         <div class="lg:col-span-5">
           <div id="current-card" class="rounded-xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm p-5" aria-live="polite" aria-busy="true">
             <div class="flex items-start justify-between gap-3 mb-4">
@@ -37,9 +38,23 @@
             <p id="freshness" class="mt-4 text-xs text-tertiary flex items-center gap-1.5"></p>
           </div>
         </div>
+        {% else %}
+        <div class="lg:col-span-5">
+          <div id="visitor-card" class="rounded-xl bg-surface-container-lowest border border-outline-variant/30 shadow-sm p-5">
+            <p class="font-headline text-xs font-bold tracking-widest text-primary uppercase">{{ location.name }}</p>
+            <h2 class="mt-1 font-headline text-xl font-bold text-on-surface">Explora las cascadas</h2>
+            <p class="mt-2 text-sm text-on-surface-variant">Mira los lugares, sus fotos y lo que opinan otros visitantes. Para consultar el clima y el pronóstico, y para puntuar o comentar, necesitas una cuenta.</p>
+            <div class="mt-4 flex flex-wrap gap-3">
+              <a href="{{ url_for('pages.login') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold text-sm transition-colors">Ingresar</a>
+              <a href="{{ url_for('pages.register') }}" class="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-outline-variant/60 text-sm font-headline font-semibold hover:bg-surface-container-high transition-colors">Crear cuenta</a>
+            </div>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </section>
 
+    {% if user %}
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
 
       <!-- Calendario (RF04) -->
@@ -85,6 +100,182 @@
       </section>
     </div>
 
+
+    <!-- Afluencia de visitantes: histórico por día, mes y año, y predicción -->
+    <section id="afluencia" class="mt-8 bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-6 md:p-8 shadow-sm" aria-labelledby="afl-title">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="max-w-2xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed text-xs font-headline font-semibold mb-3">
+            <span class="material-symbols-outlined text-[15px]" aria-hidden="true">groups</span>Planificación de la afluencia
+          </div>
+          <h2 id="afl-title" class="font-headline text-2xl md:text-3xl font-bold text-primary tracking-tight">Afluencia de visitantes</h2>
+          <p class="mt-1 text-on-surface-variant">Cuántas personas visitan las cascadas por día, mes y año, y cuántas se esperan en los próximos días y meses.</p>
+        </div>
+        <span id="visits-demo-badge" hidden class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-warn-container text-on-warn-container text-xs font-headline font-bold">
+          <span class="material-symbols-outlined text-[16px]" aria-hidden="true">science</span>Datos de demostración
+        </span>
+      </div>
+
+      <div class="mt-5 flex flex-wrap items-end gap-4">
+        <label class="text-sm font-semibold text-on-surface-variant flex flex-col gap-1">Lugar
+          <select id="visits-place" class="rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-on-surface min-w-[15rem]">
+            <option value="">Todos los lugares (Honolulo)</option>
+          </select>
+        </label>
+        <div role="tablist" aria-label="Periodo" class="inline-flex rounded-lg border border-outline-variant/40 overflow-hidden font-headline text-sm font-semibold">
+          <button type="button" role="tab" data-visits-gran="day" aria-selected="false" class="px-4 py-2 transition-colors">Día</button>
+          <button type="button" role="tab" data-visits-gran="month" aria-selected="true" class="px-4 py-2 border-l border-outline-variant/40 transition-colors">Mes</button>
+          <button type="button" role="tab" data-visits-gran="year" aria-selected="false" class="px-4 py-2 border-l border-outline-variant/40 transition-colors">Año</button>
+        </div>
+      </div>
+
+      <dl id="visits-kpis" class="mt-6 grid grid-cols-2 lg:grid-cols-5 gap-3" aria-live="polite"></dl>
+
+      <div class="mt-6">
+        <div id="visits-chart" class="w-full" aria-busy="true"><div class="skeleton h-72 w-full"></div></div>
+        <ul class="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-xs text-on-surface-variant" aria-label="Leyenda del gráfico">
+          <li class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:#236847"></span>Visitas registradas</li>
+          <li class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:#90d5ad"></span>Visitas de demostración</li>
+          <li class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm" style="background:repeating-linear-gradient(135deg,#c27a0e 0 2px,#fff0c2 2px 5px)"></span>Pronóstico (con intervalo del 95 %)</li>
+          <li class="flex items-center gap-1.5"><span class="inline-block w-3 h-3 rounded-sm border border-dashed border-primary"></span>Periodo en curso</li>
+        </ul>
+      </div>
+
+      <div id="visits-model" class="mt-5 rounded-lg bg-surface-container-low border border-outline-variant/30 p-4 text-sm text-on-surface-variant" aria-live="polite"></div>
+
+      <details class="mt-4 group">
+        <summary class="cursor-pointer list-none flex items-center gap-2 font-headline font-semibold text-on-surface text-sm">
+          <span class="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">table</span>Ver los datos en tabla
+          <span class="material-symbols-outlined text-on-surface-variant text-[18px] transition-transform group-open:rotate-180" aria-hidden="true">expand_more</span>
+        </summary>
+        <div id="visits-table" class="mt-3 overflow-x-auto max-h-80 text-sm"></div>
+      </details>
+
+      <details id="visits-regional-box" class="mt-3 group">
+        <summary class="cursor-pointer list-none flex items-center gap-2 font-headline font-semibold text-on-surface text-sm">
+          <span class="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">query_stats</span>Referencia oficial de la región (BCRP / MINCETUR)
+          <span class="material-symbols-outlined text-on-surface-variant text-[18px] transition-transform group-open:rotate-180" aria-hidden="true">expand_more</span>
+        </summary>
+        <div id="visits-regional" class="mt-3 text-sm text-on-surface-variant">Cargando…</div>
+      </details>
+
+      {% if user.role == 'admin' %}
+      <details id="visits-admin" class="mt-3 group">
+        <summary class="cursor-pointer list-none flex items-center gap-2 font-headline font-semibold text-on-surface text-sm">
+          <span class="material-symbols-outlined text-primary text-[20px]" aria-hidden="true">edit_note</span>Registrar visitas (administración)
+          <span class="material-symbols-outlined text-on-surface-variant text-[18px] transition-transform group-open:rotate-180" aria-hidden="true">expand_more</span>
+        </summary>
+        <div class="mt-3 grid gap-5 lg:grid-cols-2">
+          <form id="visits-form" class="flex flex-wrap items-end gap-3" novalidate>
+            <label class="text-sm font-semibold text-on-surface-variant flex flex-col gap-1">Lugar
+              <select id="visits-form-place" required class="rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-on-surface min-w-[14rem]"></select>
+            </label>
+            <label class="text-sm font-semibold text-on-surface-variant flex flex-col gap-1">Fecha
+              <input id="visits-form-date" type="date" required class="rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-on-surface">
+            </label>
+            <label class="text-sm font-semibold text-on-surface-variant flex flex-col gap-1">Visitantes
+              <input id="visits-form-count" type="number" min="0" max="50000" step="1" inputmode="numeric" required class="w-28 rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-on-surface">
+            </label>
+            <button type="submit" class="px-4 py-2 rounded-lg bg-primary text-on-primary font-headline font-semibold text-sm hover:bg-primary-container transition-colors">Guardar</button>
+            <p id="visits-form-msg" class="basis-full text-sm" role="status"></p>
+          </form>
+          <div>
+            <p class="text-sm font-semibold text-on-surface-variant mb-1">Últimos registros</p>
+            <ul id="visits-recent" class="text-sm text-on-surface-variant space-y-0.5"><li>Aún no hay visitas registradas.</li></ul>
+            <button id="visits-clear-demo" type="button" class="mt-3 px-3 py-1.5 rounded-lg border border-outline-variant/50 text-xs font-headline font-semibold text-on-surface-variant hover:bg-surface-container-low">Quitar los datos de demostración</button>
+          </div>
+        </div>
+      </details>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- Boletería: compra de boletos de entrada (S/ 5 por persona; pago simulado) -->
+    <section id="boleteria" class="mt-12 bg-surface-container-lowest rounded-xl border border-outline-variant/30 p-6 md:p-8 shadow-sm" aria-labelledby="tk-title">
+      <div class="flex flex-wrap items-start justify-between gap-4">
+        <div class="max-w-2xl">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-container text-on-secondary-fixed text-xs font-headline font-semibold mb-3">
+            <span class="material-symbols-outlined text-[15px]" aria-hidden="true">confirmation_number</span>Boletería
+          </div>
+          <h2 id="tk-title" class="font-headline text-2xl md:text-3xl font-bold text-primary tracking-tight">Compra tu boleto</h2>
+          <p class="mt-1 text-on-surface-variant">La entrada cuesta <strong id="tk-price" class="text-on-surface">S/ 5.00</strong> por persona. Elige el lugar, la fecha de tu visita y cuántas personas van.</p>
+        </div>
+        <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-warn-container text-on-warn-container text-xs font-headline font-bold">
+          <span class="material-symbols-outlined text-[16px]" aria-hidden="true">science</span>Pago simulado (demostración)
+        </span>
+      </div>
+
+      {% if user %}
+      <div class="mt-6 grid gap-8 lg:grid-cols-2">
+        <form id="tk-form" class="space-y-4" novalidate>
+          <label class="block text-sm font-semibold text-on-surface-variant">Lugar
+            <select id="tk-place" required class="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-on-surface"></select>
+          </label>
+          <div class="grid grid-cols-2 gap-4">
+            <label class="block text-sm font-semibold text-on-surface-variant">Fecha de la visita
+              <input id="tk-date" type="date" required class="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 text-on-surface">
+            </label>
+            <div class="text-sm font-semibold text-on-surface-variant">Personas
+              <div class="mt-1 inline-flex items-center rounded-lg border border-outline-variant/50 overflow-hidden">
+                <button type="button" id="tk-minus" class="px-3 py-2 hover:bg-surface-container-high" aria-label="Quitar una persona">−</button>
+                <input id="tk-qty" type="number" min="1" max="20" value="1" inputmode="numeric" class="w-14 text-center py-2 bg-surface-container-lowest text-on-surface" aria-label="Cantidad de personas">
+                <button type="button" id="tk-plus" class="px-3 py-2 hover:bg-surface-container-high" aria-label="Agregar una persona">+</button>
+              </div>
+            </div>
+          </div>
+          <fieldset>
+            <legend class="text-sm font-semibold text-on-surface-variant">Medio de pago</legend>
+            <div class="mt-1 flex flex-wrap gap-2" id="tk-methods">
+              <label class="cursor-pointer"><input type="radio" name="tk-method" value="yape" class="peer sr-only" checked><span class="inline-block px-4 py-2 rounded-lg border border-outline-variant/50 text-sm font-headline font-semibold peer-checked:bg-primary peer-checked:text-on-primary peer-focus-visible:ring-2">Yape</span></label>
+              <label class="cursor-pointer"><input type="radio" name="tk-method" value="plin" class="peer sr-only"><span class="inline-block px-4 py-2 rounded-lg border border-outline-variant/50 text-sm font-headline font-semibold peer-checked:bg-primary peer-checked:text-on-primary peer-focus-visible:ring-2">Plin</span></label>
+              <label class="cursor-pointer"><input type="radio" name="tk-method" value="tarjeta" class="peer sr-only"><span class="inline-block px-4 py-2 rounded-lg border border-outline-variant/50 text-sm font-headline font-semibold peer-checked:bg-primary peer-checked:text-on-primary peer-focus-visible:ring-2">Tarjeta</span></label>
+              <label class="cursor-pointer"><input type="radio" name="tk-method" value="efectivo" class="peer sr-only"><span class="inline-block px-4 py-2 rounded-lg border border-outline-variant/50 text-sm font-headline font-semibold peer-checked:bg-primary peer-checked:text-on-primary peer-focus-visible:ring-2">Efectivo en puerta</span></label>
+            </div>
+          </fieldset>
+          <div class="rounded-lg bg-surface-container p-4 flex items-center justify-between gap-4">
+            <span id="tk-sum" class="text-on-surface-variant" aria-live="polite">1 persona × S/ 5.00</span>
+            <strong id="tk-total" class="font-headline text-2xl text-primary">S/ 5.00</strong>
+          </div>
+          <p id="tk-error" role="alert" class="text-sm text-error" hidden></p>
+          <button id="tk-buy" type="submit" class="px-6 py-3 rounded-full bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold transition-colors">Comprar boleto</button>
+          <p class="text-xs text-on-surface-variant">Pago simulado: no se cobra dinero ni se piden datos de tarjeta. Presenta el código del boleto en la puerta el día de tu visita.</p>
+        </form>
+
+        <div>
+          <div id="tk-result" hidden class="mb-6 rounded-xl border-2 border-primary/40 bg-secondary-container/40 p-5" role="status"></div>
+          <h3 class="font-headline text-lg font-bold text-on-surface">Mis boletos</h3>
+          <ul id="tk-mine" class="mt-3 space-y-3" aria-live="polite"><li class="skeleton h-20 w-full"></li></ul>
+        </div>
+      </div>
+
+      {% if user.role == 'admin' %}
+      <details id="tk-admin" class="mt-8 rounded-lg border border-outline-variant/40 bg-surface-container-low">
+        <summary class="cursor-pointer px-4 py-3 font-headline font-semibold text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-primary" aria-hidden="true">qr_code_scanner</span>Puerta y ventas (administración)
+        </summary>
+        <div class="p-4 pt-1 grid gap-6 lg:grid-cols-2">
+          <form id="tk-validate" class="space-y-3" novalidate>
+            <label class="block text-sm font-semibold text-on-surface-variant">Código del boleto
+              <input id="tk-code" type="text" maxlength="11" autocomplete="off" placeholder="HN-XXXXXXXX" class="mt-1 w-full rounded-lg border border-outline-variant/50 bg-surface-container-lowest px-3 py-2 font-mono uppercase text-on-surface">
+            </label>
+            <button type="submit" class="px-5 py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary text-sm font-headline font-semibold">Validar entrada</button>
+            <p id="tk-validate-msg" role="status" class="text-sm" hidden></p>
+          </form>
+          <div id="tk-summary" aria-live="polite"><div class="skeleton h-24 w-full"></div></div>
+        </div>
+      </details>
+      {% endif %}
+      {% else %}
+      <div class="mt-6 rounded-lg bg-surface-container p-5 flex flex-wrap items-center justify-between gap-4">
+        <p class="text-on-surface-variant">Para comprar tu boleto necesitas una cuenta. Es gratis y solo toma un minuto.</p>
+        <div class="flex gap-3">
+          <a href="{{ url_for('pages.login', next='/') }}" class="px-4 py-2 rounded-full border border-outline-variant/60 bg-surface-container-low hover:bg-surface-container-high text-sm font-headline font-semibold text-on-surface">Ingresar</a>
+          <a href="{{ url_for('pages.register') }}" class="px-4 py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary text-sm font-headline font-semibold">Crear cuenta</a>
+        </div>
+      </div>
+      {% endif %}
+    </section>
+
     <!-- Lugares (los administra el administrador: descripciones y fotos) -->
     <section id="lugares" class="mt-12" aria-labelledby="lugares-titulo">
       <div class="max-w-2xl mb-6">
@@ -99,6 +290,7 @@
       </div>
     </section>
 
+    {% if user %}
     <!-- Historial (RF08) -->
     <section id="historial" class="mt-8">
       <details id="history-details" class="bg-surface-container-lowest rounded-xl border border-outline-variant/30 shadow-sm group">
@@ -118,6 +310,7 @@
         </div>
       </details>
     </section>
+    {% endif %}
   </div>
 </main>
 <dialog id="reviews-dialog" aria-labelledby="reviews-title" class="w-[min(94vw,46rem)] max-h-[90vh] p-0 rounded-2xl bg-surface text-on-surface shadow-2xl backdrop:bg-black/45 backdrop:backdrop-blur-sm">
@@ -132,9 +325,23 @@
   </div>
   <div id="reviews-body" class="px-6 py-5 overflow-y-auto max-h-[calc(90vh-5rem)]" aria-live="polite"></div>
 </dialog>
+<dialog id="photo-dialog" aria-labelledby="photo-title" class="p-0 bg-transparent max-w-none max-h-none w-[min(96vw,60rem)] m-auto backdrop:bg-black/80 backdrop:backdrop-blur-sm">
+  <div class="relative flex flex-col items-center gap-3">
+    <button type="button" data-photo-close aria-label="Cerrar foto" class="absolute top-2 right-2 z-10 w-10 h-10 rounded-full bg-black/60 text-white hover:bg-black/80 flex items-center justify-center">
+      <span class="material-symbols-outlined text-[22px]" aria-hidden="true">close</span>
+    </button>
+    <img id="photo-img" alt="" class="max-h-[84vh] max-w-full w-auto object-contain rounded-xl shadow-2xl bg-black/20">
+    <div class="text-center text-white px-4">
+      <h2 id="photo-title" class="font-headline text-lg font-bold"></h2>
+      <p id="photo-caption" class="text-sm text-white/80"></p>
+    </div>
+  </div>
+</dialog>
 <div id="toast" role="status" aria-live="polite" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-[90vw] pointer-events-none"></div>
 {% endblock %}
 {% block scripts %}
 <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/reviews.js') }}" defer></script>
+{% if user %}<script src="{{ url_for('static', filename='js/visits.js') }}" defer></script>{% endif %}
+<script src="{{ url_for('static', filename='js/tickets.js') }}" defer></script>
 {% endblock %}

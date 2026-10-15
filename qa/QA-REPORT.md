@@ -60,6 +60,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | RN08 · Escenario 5 | `test_resilience.py` (proveedor caído real): dato anterior marcado `stale` + mensaje exacto; sin dato → 503. **Además ocurrió de verdad:** Open-Meteo devolvió HTTP 503 durante las pruebas y el sistema respondió conforme al spec |
 | Escenario 6 (administrador: descripciones y fotos) | `test_photos.py`, `test_places.py`, `test_admin.py`, `test_scenario6_*` (edición desde la interfaz real + subida de foto + el visitante la ve), permisos por rol, auditoría de cambios |
 | Escenario 7 (correo con código + consentimiento) | `test_registration.py`, `test_scenario7_*`: código de 6 dígitos por correo, sin sesión hasta confirmar, 5 intentos máximo, vencimiento, reenvío limitado, consentimiento obligatorio y registrado con versión, alias de Gmail |
+| Escenario 9 (visitante sin cuenta) | `test_visitors.py` (web, 20 pruebas) y `test_scenario9_*` (extremo a extremo): `/` pública sin el módulo del clima, opiniones legibles sin sesión, «mi opinión» y el clima responden 401, y el JavaScript no manda al visitante a `/ingresar` |
 | Escenario 8 (nombre y apellido reales) | `test_scenario8_*`: obligatorios y con validación de plausibilidad (se rechazan «Test», «aaaa», dígitos, HTML…) |
 | Opiniones y puntuación (visitantes) | `test_reviews.py` (78), `test_reviews_web.py`, `qa/test_reviews_e2e.py`: una por persona y lugar, 1–5 estrellas enteras, comentario opcional ≤ 1000 sin enlaces, nombre público «Nombre I.», sin datos personales en la salida, promedio y distribución |
 | Rol de administrador: fijar y eliminar comentarios (además de cambiar imágenes) | permisos 401/403, fijar con tope de 3 por lugar (también con 8 peticiones simultáneas), orden, eliminar con auditoría **sin conservar el texto**, moderación desde la ventana pública y desde `/admin/lugares/<lugar>` |
@@ -155,6 +156,21 @@ Abierto (no es un defecto del código, sino de cómo se publique): conexiones le
 necesitan un proxy delante y no se pudieron probar (gunicorn no corre en Windows; Docker sin construir). El ingreso masivo es la
 petición anónima más cara (≈ 40 por segundo, un hash scrypt cada una): el límite por IP la contiene, pero un ataque desde muchas IP
 necesitaría protección en el borde.
+
+### Tercera ronda (2026-10-13) — diagnóstico externo
+
+Un diagnóstico del repositorio (revisión de código y ejecución de las suites con Python 3.12 sobre Linux) encontró lo siguiente. Todo
+está corregido, con pruebas nuevas (+30 unitarias y de integración, +1 de extremo a extremo).
+
+| ID | Sev. | Hallazgo | Estado |
+|---|:-:|---|---|
+| **D22** | Alta (funcional) | **Escenario 9 sin cumplir en la interfaz.** `/` exigía sesión y era la única pantalla con los lugares, las fotos y las opiniones: un visitante sin cuenta no podía verlos (el spec dice que sí, solo no puntuar ni comentar). Las pruebas cubrían la API pública, no la experiencia del visitante. | ✅ `/` es pública; sin sesión no se muestran ni se piden el clima, el pronóstico ni el historial; la ventana de opiniones muestra «Inicia sesión para opinar» |
+| **D23** | Media (herramientas) | `create_test_database` y `dev.py` cortaban la URL de PostgreSQL por la última `/` y perdían el `?host=/ruta` del socket Unix que `pgserver` usa en Linux y macOS: 143 de 149 pruebas de `auth` fallaban por conexión, y `dev.py up` no habría funcionado. En Windows (TCP) no se notaba. | ✅ `with_database()` conserva la consulta; también en `dev.py` y en `qa/` |
+| **D24** | Media (seguridad) | El compose publicaba el puerto 8000 en todas las interfaces. Con `TRUSTED_PROXY_HOPS=1` (detrás de Caddy), quien llegara directo al 8000 podía falsificar `X-Forwarded-For` y saltarse el límite por IP. Solo lo impedía una regla del Security Group. | ✅ Se publica en `127.0.0.1` por defecto (`WEB_BIND`); Caddy llega por la red interna de Docker |
+| **D25** | Media (calidad) | Sin integración continua: las pruebas dependían de que alguien las ejecutara a mano. | ✅ `.github/workflows/tests.yml` |
+
+Lo que cambió en las pruebas existentes: la de «sin sesión redirige a `/ingresar`» ahora comprueba la página pública, y las de cierre de
+sesión y de sesión revocada comprueban que se cae a esa página pública con las cookies borradas.
 
 ## 5. Observaciones (no son defectos) y riesgos aceptados
 

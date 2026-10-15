@@ -50,6 +50,8 @@ tailwind.config = {
       <a class="text-primary border-b-2 border-primary pb-1" href="{{ url_for('pages.index') }}#clima-actual">Clima actual</a>
       <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#calendario">Calendario</a>
       <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#lugares">Lugares</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#afluencia">Afluencia</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#boleteria">Boletería</a>
       <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="{{ url_for('pages.index') }}#historial">Historial</a>
       {% if user.role == 'admin' %}
       <a class="text-on-surface-variant hover:text-primary transition-colors pb-1 flex items-center gap-1" href="{{ url_for('admin.places') }}"><span class="material-symbols-outlined text-[16px]" aria-hidden="true">edit_square</span>Administración</a>
@@ -66,6 +68,15 @@ tailwind.config = {
           <span class="material-symbols-outlined text-[18px]" aria-hidden="true">logout</span>Salir
         </button>
       </form>
+    </div>
+    {% elif public_nav %}
+    <nav class="hidden md:flex items-center gap-8 font-headline text-sm font-semibold" aria-label="Principal">
+      <a class="text-primary border-b-2 border-primary pb-1" href="#lugares">Lugares</a>
+      <a class="text-on-surface-variant hover:text-primary transition-colors pb-1" href="#boleteria">Boletería</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <a href="{{ url_for('pages.login') }}" class="px-4 py-2 rounded-full border border-outline-variant/60 bg-surface-container-low hover:bg-surface-container-high text-sm font-headline font-semibold text-on-surface transition-colors">Ingresar</a>
+      <a href="{{ url_for('pages.register') }}" class="px-4 py-2 rounded-full bg-primary hover:bg-primary-container text-on-primary text-sm font-headline font-semibold transition-colors">Crear cuenta</a>
     </div>
     {% endif %}
   </div>

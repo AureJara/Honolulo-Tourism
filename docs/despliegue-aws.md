@@ -45,7 +45,8 @@ Confirma el precio exacto en la calculadora de AWS y **crea primero una alerta d
    - HTTP (80): origen **Cualquier lugar**.
    - HTTPS (443): origen **Cualquier lugar**.
 
-   **No abras** ningún otro puerto: ni el 8000, ni del 5001 al 5004, ni el 5432 de la base de datos.
+   **No abras** ningún otro puerto: ni el 8000, ni del 5001 al 5004, ni el 5432 de la base de datos. (Docker ya publica el
+   8000 solo en `127.0.0.1`; el Security Group es una segunda barrera. No cambies `WEB_BIND` en el `.env` del servidor.)
 6. **Almacenamiento:** 20 GiB `gp3`.
 7. *Lanzar instancia.*
 

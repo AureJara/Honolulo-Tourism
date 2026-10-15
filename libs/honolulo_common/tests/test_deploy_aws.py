@@ -56,7 +56,16 @@ def test_the_compose_override_requires_a_domain_and_keeps_the_certificates():
 
 def test_the_main_compose_still_hides_the_database_and_internal_services():
     compose = read(ROOT / "docker-compose.yml")
-    assert re.findall(r'ports: \["(\d+:\d+)"\]', compose) == ["8000:8000"]       # solo la web publica un puerto
+    assert re.findall(r'ports: \["(?:\$\{WEB_BIND:-[0-9.]+\}:)?(\d+:\d+)"\]', compose) == ["8000:8000"]   # solo la web publica un puerto
+
+
+def test_the_web_port_is_published_only_on_this_machine_by_default():
+    """Con ``TRUSTED_PROXY_HOPS=1`` (detrás de Caddy) quien llegara directo al 8000 podría falsificar ``X-Forwarded-For`` y
+    saltarse el límite por IP. Caddy llega a ``web`` por la red interna de Docker, así que el puerto no necesita estar abierto."""
+    compose = read(ROOT / "docker-compose.yml")
+    assert 'ports: ["${WEB_BIND:-127.0.0.1}:8000:8000"]' in compose
+    assert env_lines(read(ROOT / ".env.example"))["WEB_BIND"].split("#")[0].strip() == "127.0.0.1"
+    assert "WEB_BIND" not in read(AWS / "generar-env.sh")                  # el script nunca lo abre
 
 
 # ---------------------------------------------------------------------------- .env
