@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_password_toggle.html" import password_toggle %}
 {% block title %}Ingresar — Honolulo{% endblock %}
 {% block content %}
 <main id="contenido" class="pt-32 pb-24">
@@ -27,8 +28,11 @@
         </div>
         <div class="flex flex-col gap-1.5">
           <label for="password" class="text-xs font-headline font-semibold uppercase tracking-wider text-primary">Contraseña</label>
-          <input id="password" name="password" type="password" required autocomplete="current-password"
-                 class="w-full px-4 py-2.5 rounded-xl border border-outline-variant/60 bg-surface text-on-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+          <div class="relative">
+            <input id="password" name="password" type="password" required autocomplete="current-password"
+                   class="w-full pl-4 pr-12 py-2.5 rounded-xl border border-outline-variant/60 bg-surface text-on-surface text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-secondary-container">
+            {{ password_toggle("password") }}
+          </div>
         </div>
         <button type="submit" class="mt-2 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-primary hover:bg-primary-container text-on-primary font-headline font-semibold transition-colors shadow-md active:scale-95">
           <span class="material-symbols-outlined text-[20px]" aria-hidden="true">login</span>Ingresar
