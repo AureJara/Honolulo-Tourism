@@ -65,12 +65,31 @@ def test_the_password_is_never_written_into_the_page_even_after_an_error(client,
     assert len(toggles(html)) == 2 and 'type="password"' in input_tags(html)["password"]     # sigue oculta
 
 
-@pytest.mark.parametrize("path", ["/ingresar", "/registro", "/verificar", "/politica-de-privacidad"])
-def test_the_script_is_loaded_by_every_page_so_a_new_password_field_needs_no_extra_wiring(client, path):
+@pytest.mark.parametrize("path", ["/ingresar", "/registro"])
+def test_the_pages_with_password_fields_load_the_script_exactly_once(client, path):
+    html = client.get(path).get_data(as_text=True)
+    assert html.count("js/password-toggle.js") == 1          # dos copias alternarían dos veces y no se vería nada
+    assert client.get("/static/js/password-toggle.js").status_code == 200
+
+
+@pytest.mark.parametrize("path", ["/", "/verificar", "/politica-de-privacidad", "/politica-de-cookies"])
+def test_the_pages_without_password_fields_do_not_carry_the_script_or_the_word(client, path):
+    """Las demás pantallas no cargan código que no usan; además la QA exige que, por ejemplo, la de auditoría no
+    contenga la palabra «password» (se vigila que ninguna clave se cuele en una pantalla)."""
     set_pending_email(client)                       # /verificar solo se muestra con un correo pendiente de confirmar
     html = client.get(path).get_data(as_text=True)
-    assert "js/password-toggle.js" in html
-    assert client.get("/static/js/password-toggle.js").status_code == 200
+    assert "password-toggle" not in html and "password" not in html.lower().replace("password_", "")
+
+
+def test_every_template_with_a_password_field_loads_the_script():
+    """Si alguien añade un campo de contraseña en otra plantilla y olvida el script, esta prueba se lo recuerda."""
+    templates = Path(__file__).resolve().parents[1] / "app" / "templates"
+    with_fields = {p.name for p in templates.rglob("*.html") if p.name != "_password_toggle.html"
+                   and re.search(r'type\s*=\s*"password"|password_toggle\(', p.read_text(encoding="utf-8"))}
+    assert {"login.html", "register.html"} <= with_fields                  # que la búsqueda no pase en vacío
+    for name in with_fields:
+        source = next(templates.rglob(name)).read_text(encoding="utf-8")
+        assert "js/password-toggle.js" in source, f"{name} tiene un campo de contraseña pero no carga el script del ojito"
 
 
 def test_edge_does_not_show_its_own_eye_next_to_ours():

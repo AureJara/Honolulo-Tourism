@@ -5,7 +5,7 @@
 | **Fecha** | 2026-09-30 (base) · 2026-10-03 (segunda ronda: opiniones, moderación, políticas, seguridad) |
 | **Versión probada** | Sistema completo: `web`, `auth`, `weather`, `forecast`, `catalog` + PostgreSQL 16 (embebido) |
 | **Entorno** | Windows 11, Python 3.11, Chromium (panel del navegador integrado), proveedor meteorológico **real** (Open-Meteo), correo en modo `file` y **SMTP real contra un servidor local de pruebas** |
-| **Resultado** | **1 122 pruebas automatizadas en verde** (931 unitarias/integración + 191 de QA de extremo a extremo) y 27 defectos encontrados y corregidos (ninguno crítico) |
+| **Resultado** | **1 125 pruebas automatizadas en verde** (934 unitarias/integración + 191 de QA de extremo a extremo) y 27 defectos encontrados y corregidos (ninguno crítico) |
 | **Veredicto** | Apto para pruebas de aceptación con el cliente. Pendientes antes de producción: ver §6. |
 
 ## 1. Estrategia
@@ -14,7 +14,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 
 | Nivel | Qué cubre | Dónde |
 |---|---|---|
-| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 931 pruebas |
+| Unitarias y de integración | Reglas de negocio (franjas, puntuación, disponibilidad, opiniones), validación, permisos, PostgreSQL real (no SQLite), SMTP local | `libs/*/tests`, `services/*/tests` — 934 pruebas |
 | Aceptación (Gherkin del spec) | Escenarios 1–8 contra el sistema corriendo, con correo real de desarrollo y proveedor real | `qa/test_e2e_acceptance.py` — 28 |
 | Seguridad | JWT manipulado, escalada de privilegios, CSRF, XSS/SQLi, subidas maliciosas, enumeración, cabeceras y cookies | `qa/test_security.py` — 49 |
 | Resiliencia | Proveedor caído (puerto cerrado), servicios muertos, degradación de la UI | `qa/test_resilience.py` — 7 |
@@ -37,7 +37,7 @@ Pruebas **basadas en riesgo**, de caja negra sobre el sistema real (sin mocks) y
 | `weather-service` | 30 | ✅ |
 | `forecast-service` | 88 | ✅ |
 | `catalog-service` (incluye afluencia de visitantes, boletería y fotos iniciales) | 235 | ✅ |
-| `web` (incluye el límite por IP, la pantalla de seguridad, las llamadas internas, el aviso del código, la afluencia, la boletería y el «ojito» de la contraseña) | 243 | ✅ |
+| `web` (incluye el límite por IP, la pantalla de seguridad, las llamadas internas, el aviso del código, la afluencia, la boletería y el «ojito» de la contraseña) | 246 | ✅ |
 | QA: aceptación / seguridad / resiliencia / sesión / integridad / rendimiento | 28 / 49 / 7 / 6 / 16 / 12 | ✅ |
 | QA nuevo: opiniones y moderación / entrega de correo / privacidad y secretos | 23 / 6 / 18 | ✅ |
 
@@ -177,7 +177,7 @@ sesión y de sesión revocada comprueban que se cae a esa página pública con l
 | ID | Sev. | Hallazgo | Estado |
 |---|:-:|---|---|
 | **D26** | Media (operación) | **No había forma de restablecer una contraseña.** Una administradora que la olvidaba quedaba fuera: ni «olvidé mi contraseña» ni un comando (`create-admin` sobre una cuenta existente solo cambia el rol), y la contraseña no se puede recuperar porque solo se guarda su hash. Apareció al operar el servidor real. | ✅ `flask set-password` (y `dev.py set-password`): pide la clave sin mostrarla, aplica la política del registro, desbloquea la cuenta, cierra sus sesiones abiertas y deja el evento `password_changed` en la auditoría. 8 pruebas en `services/auth/tests/test_set_password.py` |
-| **D27** | Baja (usabilidad) | Quien probó el sitio en el móvil no podía ver lo que escribía en los campos de contraseña (registro e ingreso), lo que favorece errores al repetirla. | ✅ «Ojito» para mostrar u ocultar la contraseña: botón accesible (`aria-pressed`, teclado), se oculta al salir de la página, nunca se escribe la clave en el HTML y se oculta el ojo propio de Edge. Se comprobó en el navegador (escritorio y 375 px) y con 13 pruebas (`services/web/tests/test_password_toggle.py`, 4 de ellas ejecutan el script con Node) |
+| **D27** | Baja (usabilidad) | Quien probó el sitio en el móvil no podía ver lo que escribía en los campos de contraseña (registro e ingreso), lo que favorece errores al repetirla. | ✅ «Ojito» para mostrar u ocultar la contraseña: botón accesible (`aria-pressed`, teclado), se oculta al salir de la página, nunca se escribe la clave en el HTML y se oculta el ojo propio de Edge. Se comprobó en el navegador (escritorio y 375 px) y con 16 pruebas (`services/web/tests/test_password_toggle.py`, 4 de ellas ejecutan el script con Node). **La QA de extremo a extremo detectó una regresión de la primera versión:** el script se cargaba desde la plantilla base, así que todas las pantallas (también la de auditoría) pasaron a contener la palabra «password» y falló `test_the_audit_page_never_shows_full_emails_or_secrets`. Ahora el script se carga solo en las pantallas con campos de contraseña, y una prueba revisa las plantillas para que nadie olvide cargarlo en una nueva |
 
 Observación del mismo despliegue: con 1 GB de memoria (`t3.micro`) el servidor se congelaba al construir las imágenes. La guía exige
 `t3.small` como mínimo y recomienda 4 GB (`c7i-flex.large` o `t3.medium`) si se construye en el propio servidor.
@@ -190,6 +190,7 @@ Observación del mismo despliegue: con 1 GB de memoria (`t3.micro`) el servidor 
 - Cabecera `Server: Werkzeug/…` visible: solo en el servidor de desarrollo; en producción usa gunicorn tras un proxy.
 - Varias cuentas pueden iniciar sesión a la vez; cerrar una no cierra las demás (verificado).
 - **La suite de QA abre unas 2 400 conexiones por ejecución** y en Windows quedan en `TIME_WAIT` unos 2 minutos: dos ejecuciones seguidas pueden agotar los puertos locales (`WinError 10048`) y hacer fallar una prueba al azar (pasa sola). Esperar ~2 min entre corridas completas.
+- **Las pruebas de latencia con concurrencia dependen de que el equipo esté libre.** Con menos de 1 GB de memoria libre (juego, Discord y navegador abiertos) la QA tardó 8 minutos en vez de 3 y `test_latency_under_concurrency_has_no_errors[calendario del mes]` midió p95 = 4,6 s frente al límite de 4 s; al repetirla con el equipo despejado pasó. No indica un problema del código, pero conviene cerrar otros programas antes de correr `qa/test_performance.py`.
 - **Las opiniones se moderan después de publicarse** (no hay cola previa) y solo se bloquean los enlaces: no hay filtro de insultos.
 - **La cuenta administradora local tiene una contraseña más corta que el mínimo actual (10 caracteres)**: su dueña la fijó directamente en la base de desarrollo, fuera de los flujos que aplican la política (registro y `create-admin`). La política no es retroactiva. Antes de publicar el sistema hay que cambiarla por una que la cumpla. La cuenta de ejemplo que usaba una clave aún más corta ya se eliminó.
 - Quien ya tenía cuenta aceptó la política anterior; no se le pide aceptar la nueva (queda la versión registrada por cuenta).

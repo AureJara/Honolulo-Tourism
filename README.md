@@ -188,7 +188,7 @@ de desarrollo): se verificaron con pruebas estáticas y ejecutando el script, y 
 ## Pruebas
 
 ```bash
-python scripts/run_tests.py            # revisión de secretos + 931 pruebas: común 178 · auth 157 · weather 30 · forecast 88 · catalog 235 · web 243
+python scripts/run_tests.py            # revisión de secretos + 934 pruebas: común 178 · auth 157 · weather 30 · forecast 88 · catalog 235 · web 246
 python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sistema para la QA de extremo a extremo
 cd qa && python -m pytest -q           # 176 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```

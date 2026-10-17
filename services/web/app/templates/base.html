@@ -158,7 +158,6 @@ tailwind.config = {
   document.querySelectorAll('[data-flash]').forEach(function (el) { setTimeout(function () { el.remove(); }, Number(el.dataset.flash) || 6000); });
   document.addEventListener('click', function (e) { var b = e.target.closest('[data-flash-close]'); if (b) b.closest('[data-flash]').remove(); });
 </script>
-<script src="{{ url_for('static', filename='js/password-toggle.js') }}" defer></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>
