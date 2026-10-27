@@ -193,8 +193,11 @@ python scripts/dev.py up --mail file --no-rate-limit   # (otra terminal) el sist
 cd qa && python -m pytest -q           # 176 pruebas de QA de extremo a extremo contra el sistema corriendo
 ```
 
-La integración continua (`.github/workflows/tests.yml`, GitHub Actions con Python 3.12) ejecuta `scripts/run_tests.py` y
-`pip-audit` en cada `push` a `main` y en cada *pull request*. No corre `qa/`, que necesita el sistema completo en marcha.
+La integración continua (`.github/workflows/tests.yml`, GitHub Actions con Python 3.12) ejecuta en cada `push` a `main` y
+en cada *pull request*: `scripts/run_tests.py` (secretos y suites), la **QA de extremo a extremo** de `qa/` (contra el sistema
+completo, levantado en el propio runner; las pruebas de rendimiento corren aparte y no bloquean) y `pip-audit`. El trabajo
+`listo-para-produccion` resume los tres: se exige en la protección de la rama `main`, y el servidor se actualiza solo cuando
+está en verde.
 
 Las suites usan **PostgreSQL real** (no SQLite): `TEST_DATABASE_URL` si existe, o uno embebido con `pgserver`. Las
 unitarias simulan el proveedor externo; las de `qa/` no usan mocks. Ver el **[informe de QA](qa/QA-REPORT.md)**

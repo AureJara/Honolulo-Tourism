@@ -50,15 +50,23 @@ El grupo sigue un **ciclo corto y repetible**:
 
 ## 7. Integración continua
 
-El flujo de **GitHub Actions** ejecuta dos trabajos en paralelo:
+El flujo de **GitHub Actions** ejecuta tres trabajos en paralelo y uno final que los resume:
 
 - **`pruebas`** — instala dependencias, revisa secretos y corre las seis suites unitarias y de integración con PostgreSQL real.
+- **`qa`** — levanta el sistema completo (`scripts/dev.py up --mail file --no-rate-limit`) en el propio runner y corre la suite de
+  `qa/` de extremo a extremo, sin mocks. Falla si el sistema no llega a estar listo o si alguna prueba se omite por no encontrarlo
+  (la QA se omite sola en ese caso y, sin esa comprobación, saldría en verde). Las pruebas de rendimiento se ejecutan después y
+  **no bloquean**: los tiempos de un runner compartido varían.
 - **`dependencias`** — ejecuta `pip-audit` sobre las versiones fijadas.
+- **`listo-para-produccion`** — pasa solo si los tres anteriores terminaron en `success`. Un trabajo omitido cuenta como correcto
+  para la protección de ramas, por eso este corre siempre y lo comprueba de forma explícita.
 
-Si todo está en verde el cambio puede fusionarse; si no, se corrige y se vuelve a empujar.
+Si `listo-para-produccion` está en verde el cambio puede fusionarse y pasar a producción; si no, se corrige y se vuelve a empujar.
+En GitHub, activa la protección de la rama `main` (*Settings → Branches*) y exige solo esa comprobación.
 
 > [!NOTE]
-> La suite de QA de extremo a extremo **no corre en la nube** porque necesita el sistema completo en marcha. El grupo la ejecuta en local antes de cada entrega.
+> La actualización del servidor de AWS sigue siendo manual (`git pull && docker compose up -d --build`, ver
+> `docs/despliegue-aws.md`): la CI garantiza que lo que hay en `main` pasó las pruebas, pero no despliega por sí sola.
 
 ---
 

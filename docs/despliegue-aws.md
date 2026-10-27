@@ -128,7 +128,7 @@ Te pide el correo, el nombre, el apellido y la contraseña (10 caracteres o más
 | Qué quieres | Comando (en el servidor, dentro de `Honolulo-Tourism`) |
 |---|---|
 | Ver registros de un servicio | `docker compose logs -f --tail 100 web` (o `auth`, `catalog`, `caddy`…) |
-| Actualizar a lo último de GitHub | `git pull && docker compose up -d --build` |
+| Actualizar a lo último de GitHub | `git pull && docker compose up -d --build` (hazlo solo si el trabajo `listo-para-produccion` de GitHub Actions está en verde para ese commit) |
 | Reiniciar todo | `docker compose restart` |
 | Restablecer la contraseña de una cuenta (por ejemplo la administradora) | `docker compose exec auth flask --app app:create_app set-password` (pide el correo y la contraseña nueva sin mostrarla) |
 | Respaldo de las bases de datos | `docker compose exec -T postgres pg_dumpall -U postgres > respaldo-$(date +%F).sql` |
